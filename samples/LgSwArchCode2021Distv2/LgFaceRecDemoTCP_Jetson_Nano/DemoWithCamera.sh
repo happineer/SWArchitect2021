@@ -1,0 +1,1 @@
+./LgFaceRecDemoTCP 5000

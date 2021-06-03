@@ -1,0 +1,1 @@
+./LgFaceRecDemoTCP 5000 --input-codec=mjpeg4 friends.mp4
