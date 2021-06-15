@@ -34,7 +34,7 @@ public class Player {
 
 		video = new JLabel();
 
-		frame = new JFrame("CMU 가고싶3");
+		frame = new JFrame("CMU 3");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.getContentPane().add(video);
 		frame.setSize(500, 500);
