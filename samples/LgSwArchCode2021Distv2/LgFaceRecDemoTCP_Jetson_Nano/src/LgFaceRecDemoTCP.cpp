@@ -25,6 +25,19 @@
 #include "cudaColorspace.h"
 #include <memory>
 
+static int config_face_detection = 1;
+static int config_face_recognition = 1;
+
+#if 0
+static ptread_t tids[4];
+
+void *video_task_reader(void *args);
+void *video_task_detector(void *args);
+void *video_task_recognition(void *args);
+void *video_task_sender(void *args);
+#endif
+
+
 unsigned int FrameCount=0;
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -190,6 +203,22 @@ gstCamera* getCamera(){
     return camera;
 }
 
+void compute_duration(struct timespec *specs, int count, int ndets)
+{
+	int i;
+	int n = 0;
+	int diff;
+	char buf[256];
+
+	n += sprintf(buf, "JHH %d %d", count, ndets);
+	for (i = 0; i < count - 1; i++) {
+		diff = (specs[i + 1].tv_sec - specs[i].tv_sec) * 1000000000ULL;
+		diff += specs[i + 1].tv_nsec - specs[i].tv_nsec;
+		diff /= 1000000;
+		n += sprintf(buf + n, " %d", diff);
+	}
+	printf("%s\n", buf);
+}
 
 // perform face recognition with Raspberry Pi camera
 int camera_face_recognition(int argc, char *argv[])
@@ -295,9 +324,11 @@ int camera_face_recognition(int argc, char *argv[])
     printf("Accepted connection Request\n");
 
     // ------------------ "Detection" Loop -----------------------
+    struct timespec tspecs[10];
     while(!user_quit){
-
+		int count = 0;
         clk = clock();              // fps clock
+        clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         float* imgOrigin = NULL;    // camera image  
 
@@ -321,6 +352,7 @@ int camera_face_recognition(int argc, char *argv[])
 
         }
 
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         //since the captured image is located at shared memory, we also can access it from cpu n
         // here I define a cv::Mat for it to draw onto the image from CPU without copying data -- TODO: draw from CUDA
         if (usecamera) cudaRGBA32ToBGRA32(  (float4*)imgOrigin,  (float4*)imgOrigin, imgWidth, imgHeight); //ADDED DP
@@ -332,18 +364,23 @@ int camera_face_recognition(int argc, char *argv[])
         cudaRGBA32ToRGB8( (float4*)imgOrigin, (uchar3*)rgb_gpu, imgWidth, imgHeight );      
 
         // create GpuMat form the same image thanks to shared memory
-        cv::cuda::GpuMat imgRGB_gpu(imgHeight, imgWidth, CV_8UC3, rgb_gpu);                
+        cv::cuda::GpuMat imgRGB_gpu(imgHeight, imgWidth, CV_8UC3, rgb_gpu);
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         // pass the image to the MTCNN and get face detections
         std::vector<struct Bbox> detections;
-        finder.findFace(imgRGB_gpu, &detections);
+		if (config_face_detection) {
+        	finder.findFace(imgRGB_gpu, &detections);
+		}
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         // check if faces were detected, get face locations, bounding boxes and keypoints
         std::vector<cv::Rect> rects;
         std::vector<float*> keypoints;
         num_dets = get_detections(origin_cpu, &detections, &rects, &keypoints);               
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         // if faces detected
-        if(num_dets > 0){
+        if(num_dets > 0 && config_face_recognition){
             // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
             std::vector<matrix<rgb_pixel>> faces;                                   
             crop_and_align_faces(imgRGB_gpu, cropped_buffer_gpu, cropped_buffer_cpu, &rects, &faces, &keypoints);
@@ -359,6 +396,7 @@ int camera_face_recognition(int argc, char *argv[])
             // draw bounding boxes and labels to the original image 
             draw_detections(origin_cpu, &rects, &face_labels, &label_encodings);    
         }
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         char str[256];
         sprintf(str, "TensorRT  %.0f FPS", fps);               // print the FPS to the bar
 
@@ -368,6 +406,9 @@ int camera_face_recognition(int argc, char *argv[])
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
         //Render captured image
         if (TcpSendImageAsJpeg(TcpConnectedPort,origin_cpu)<0)  break;
+		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
+
+		compute_duration(tspecs, count, num_dets);
 
         // smooth FPS to make it readable
         fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
