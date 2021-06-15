@@ -1,1 +1,1 @@
-java RecvImagetTCP "$@"
+java RecvImageTCP
