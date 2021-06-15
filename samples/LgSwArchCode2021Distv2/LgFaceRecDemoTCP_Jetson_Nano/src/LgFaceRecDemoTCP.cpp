@@ -27,15 +27,15 @@
 
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
+static bool usecamera = false;
 
-#if 0
-static ptread_t tids[4];
+
+static pthread_t tids[4];
 
 void *video_task_reader(void *args);
 void *video_task_detector(void *args);
-void *video_task_recognition(void *args);
+void *video_task_recognizer(void *args);
 void *video_task_sender(void *args);
-#endif
 
 
 unsigned int FrameCount=0;
@@ -48,11 +48,21 @@ typedef struct {
     int         width;
     int         height;
     void        *inputImgGPU;
-    void        *output;
+    void        *output[4];
     imageFormat inputFormat;
     size_t      inputImageSize;
 
 } TMotionJpegFileDesc;
+
+struct task_info {
+	int running;
+};
+
+static struct task_info g_task_info;
+static gstCamera* g_camera = NULL;
+static TMotionJpegFileDesc MotionJpegFd;
+static int imgWidth;
+static int imgHeight;
 
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -220,6 +230,30 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	printf("%s\n", buf);
 }
 
+void *video_task_reader(void *args)
+{
+	while(1) {
+		
+	}
+	return NULL;
+}
+
+void *video_task_detector(void *args)
+{
+	return NULL;
+}
+
+void *video_task_recognizer(void *args)
+{
+	return NULL;
+}
+
+void *video_task_sender(void *args)
+{
+	return NULL;
+}
+
+
 // perform face recognition with Raspberry Pi camera
 int camera_face_recognition(int argc, char *argv[])
 {
@@ -228,7 +262,7 @@ int camera_face_recognition(int argc, char *argv[])
     struct sockaddr_in cli_addr;
     socklen_t          clilen;
     short              listen_port;
-    bool               usecamera=false;
+	struct task_info *task = &g_task_info;
 
 
     // -------------- Initialization -------------------
@@ -237,11 +271,7 @@ int camera_face_recognition(int argc, char *argv[])
     face_classifier classifier(&embedder);          // train OR deserialize classification SVM's 
     if(classifier.need_restart() == 1) return 1;    // small workaround - if svms were trained theres some kind of memory problem when generate mtcnn
 
-    gstCamera* camera=NULL;
-    TMotionJpegFileDesc MotionJpegFd;
     bool user_quit = false;
-    int imgWidth ;
-    int imgHeight ;
 
     if (argc <2) 
     {
@@ -257,16 +287,16 @@ int camera_face_recognition(int argc, char *argv[])
     {
         printf("video\n");
 
-        camera = getCamera();                // create jetson camera - PiCamera. USB-Cam needs different operations in Loop!! not implemented!
+        g_camera = getCamera();                // create jetson camera - PiCamera. USB-Cam needs different operations in Loop!! not implemented!
 
-        if( !camera )    
+        if( !g_camera )    
         {
             printf("load camera failed\n");
             return -1;
         }
 
-        imgWidth = camera->GetWidth();
-        imgHeight = camera->GetHeight();
+        imgWidth = g_camera->GetWidth();
+        imgHeight = g_camera->GetHeight();
     }
     else
     {
@@ -332,14 +362,14 @@ int camera_face_recognition(int argc, char *argv[])
 
         float* imgOrigin = NULL;    // camera image  
 
-        cv::Mat   imgOriginMjpeg;
+        //cv::Mat   imgOriginMjpeg;
 
         // the 2nd arg 1000 defines timeout, true is for the "zeroCopy" param what means the image will be stored to shared memory    
 
         if (usecamera)
         {
 
-            if( !camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
+            if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
                 printf("failed to capture RGBA image from camera\n");
         }
         else
@@ -414,7 +444,7 @@ int camera_face_recognition(int argc, char *argv[])
         fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
 
-    SAFE_DELETE(camera);
+    SAFE_DELETE(g_camera);
     CHECK(cudaFreeHost(rgb_cpu));
     CHECK(cudaFreeHost(cropped_buffer_cpu[0]));
     CHECK(cudaFreeHost(cropped_buffer_cpu[1]));
