@@ -43,12 +43,13 @@ unsigned int FrameCount=0;
 /***********************************************************************************************/
 /***********************************************************************************************/
 
+#define MJPEG_OUT_BUF_NR		4
 typedef struct {
     ifstream    mpegfile;
     int         width;
     int         height;
     void        *inputImgGPU;
-    void        *output[4];
+    void        *output[MJPEG_OUT_BUF_NR];
     imageFormat inputFormat;
     size_t      inputImageSize;
 
@@ -102,7 +103,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
     FileDesc->inputFormat = IMAGE_RGB8;
     FileDesc->inputImageSize = (FileDesc->width * FileDesc->height*(sizeof(uchar3) * 8))/8;
     FileDesc->inputImgGPU = NULL;
-    FileDesc->output= NULL;
+	memset(FileDesc->output, 0, sizeof(FileDesc->output));
 
     // allocate CUDA buffer for the image
     const size_t imgSize = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
@@ -115,11 +116,13 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         return false;
     }
 
-    if( !cudaAllocMapped(&FileDesc->output, imgSize) )
-    {
-        LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
-        return false;
-    }
+	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
+	    if( !cudaAllocMapped(&FileDesc->output[i], imgSize) )
+    	{
+        	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
+	        return false;
+    	}
+	}
 
     printf("Open width %d height %d\n",*Width,*Height);
     return true;
@@ -135,7 +138,9 @@ static bool CloseMotionJpegFile(TMotionJpegFileDesc *FileDesc)
     FileDesc->mpegfile.close();
 
     CUDA(cudaFreeHost(FileDesc->inputImgGPU));
-    CHECK(cudaFreeHost(FileDesc->output))
+	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
+	    CHECK(cudaFreeHost(FileDesc->output[i]))
+	}
 
 }
 /***********************************************************************************************/
@@ -146,6 +151,7 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, float4**  output)
 {
     unsigned int imagesize;
     unsigned char* buff;
+	static unsigned int out_idx;
 
     // validate parameters
     if( !FileDesc)
@@ -178,14 +184,15 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, float4**  output)
 
     memcpy(FileDesc->inputImgGPU, img.data, imageFormatSize(FileDesc->inputFormat, FileDesc->width, FileDesc->height));
 
-    if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, FileDesc->output, IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
+    if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, FileDesc->output[out_idx], IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
     {
         printf("LOG_IMAGE loadImage() -- failed to convert image \n");
         return false;
 
     }
 
-    *output=(float4*)FileDesc->output;
+    *output=(float4*)FileDesc->output[out_idx];
+	out_idx = (out_idx + 1) % MJPEG_OUT_BUF_NR;
 
     return true;
 
