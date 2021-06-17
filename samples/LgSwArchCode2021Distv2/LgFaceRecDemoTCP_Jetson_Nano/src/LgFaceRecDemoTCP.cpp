@@ -39,6 +39,13 @@ static bool usecamera = false;
 
 static char *video_path;
 
+enum TID_NAME {
+	TID_CAPTURE = 1,
+	TID_FACE_DETECT,
+	TID_FACE_RECOGNIZE,
+	TID_SENDER,
+};
+
 static pthread_t tids[4];
 
 void *video_task_reader(void *args);
@@ -73,6 +80,9 @@ static gstCamera* g_camera = NULL;
 static TMotionJpegFileDesc MotionJpegFd;
 static int imgWidth;
 static int imgHeight;
+
+static int capture_sock[2];
+static int sender_sock[2];
 
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -249,8 +259,6 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	printf("%s\n", buf);
 }
 
-static int capture_sock[2];
-
 static void comm_socket_init(int *sock)
 {
 	int s[2];
@@ -334,8 +342,44 @@ void *video_task_recognizer(void *args)
 	return NULL;
 }
 
+struct send_msg {
+	TTcpConnectedPort *TcpConnectedPort;
+	cv::Mat *Image;
+};
+
 void *video_task_sender(void *args)
 {
+#ifdef USE_MULTI_THREAD
+	struct pollfd fds[1];
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = sender_sock[1];
+	fds[0].events = POLLIN;
+
+	int ret;
+
+	struct send_msg msg;
+
+	while (1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+	
+		int nread;
+		nread = read(sender_sock[1], &msg, sizeof(msg));
+		assert(nread == sizeof(msg));
+		
+		//Render captured image
+	    if (TcpSendImageAsJpeg(msg.TcpConnectedPort, *msg.Image) < 0) {
+			assert(0);
+			return NULL;
+	    }
+		delete msg.Image;
+	}
+	
+#endif
 	return NULL;
 }
 
@@ -398,7 +442,10 @@ int camera_face_recognition(int argc, char *argv[])
 
 #ifdef USE_MULTI_THREAD
 	comm_socket_init(capture_sock);
-	pthread_create(&tids[0], NULL, video_task_reader, NULL);
+	pthread_create(&tids[TID_CAPTURE], NULL, video_task_reader, NULL);
+
+	comm_socket_init(sender_sock);
+	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, NULL);
 #endif
 
     mtcnn finder(imgHeight, imgWidth);              // build OR deserialize TensorRT detection network
@@ -495,7 +542,7 @@ int camera_face_recognition(int argc, char *argv[])
         // here I define a cv::Mat for it to draw onto the image from CPU without copying data -- TODO: draw from CUDA
         if (usecamera) cudaRGBA32ToBGRA32(  (float4*)imgOrigin,  (float4*)imgOrigin, imgWidth, imgHeight); //ADDED DP
         cv::Mat origin_cpu(imgHeight, imgWidth, CV_32FC4, imgOrigin);
-
+        //cv::Mat *origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, imgOrigin);
 
         // the mtcnn pipeline is based on GpuMat 8bit values 3 channels while the captured image is RGBA32
         // i use a kernel from jetson-inference to remove the A-channel and float to uint8
@@ -540,9 +587,21 @@ int camera_face_recognition(int argc, char *argv[])
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
         cv::putText(origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
-        //Render captured image
-        if (TcpSendImageAsJpeg(TcpConnectedPort,origin_cpu)<0)  break;
+
+		 //Render captured image
+#ifdef USE_MULTI_THREAD
+		 struct send_msg msg;
+		 cv::Mat *img = new cv::Mat;
+		 *img = origin_cpu.clone();
+		 //delete origin_cpu;
+
+		 msg.TcpConnectedPort = TcpConnectedPort;
+		 msg.Image = img;
+		 write(sender_sock[0], &msg, sizeof(msg));
+#else
+        if (TcpSendImageAsJpeg(TcpConnectedPort, origin_cpu) < 0)  break;
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
+#endif
 
 		compute_duration(tspecs, count, num_dets);
 
