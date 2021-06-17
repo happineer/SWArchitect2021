@@ -4,6 +4,12 @@
 #include <dlib/svm_threaded.h>
 #include <dlib/svm.h>
 #include <vector>
+#include <unistd.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <poll.h>
 
 #include "mtcnn.h"
 #include "kernels.h"
@@ -25,10 +31,13 @@
 #include "cudaColorspace.h"
 #include <memory>
 
+#define USE_MULTI_THREAD
+
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
 
+static char *video_path;
 
 static pthread_t tids[4];
 
@@ -194,6 +203,9 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, float4**  output)
     *output=(float4*)FileDesc->output[out_idx];
 	out_idx = (out_idx + 1) % MJPEG_OUT_BUF_NR;
 
+    FrameCount++;
+    printf("FrameCount %d\n",FrameCount);
+
     return true;
 
 }
@@ -237,11 +249,78 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	printf("%s\n", buf);
 }
 
+static int capture_sock[2];
+
+static void comm_socket_init(int *sock)
+{
+	int s[2];
+
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == 0) {
+		sock[0] = s[0];
+		sock[1] = s[1];
+
+		if (fcntl(s[0], F_SETFD, FD_CLOEXEC) < 0) {
+			fprintf(stderr, "[%s]: FD_CLOEXEC errno: %d\n", __func__, errno);
+		}
+		if (fcntl(s[0], F_SETFL, O_NONBLOCK) < 0) {
+			fprintf(stderr, "[%s]: O_NONBLOCK errno: %d\n", __func__, errno);
+		}
+		if (fcntl(s[1], F_SETFD, FD_CLOEXEC) < 0) {
+			fprintf(stderr, "[%s]: FD_CLOEXEC errno: %d\n", __func__, errno);
+		}
+		if (fcntl(s[1], F_SETFL, O_NONBLOCK) < 0) {
+			fprintf(stderr, "[%s]: O_NONBLOCK errno: %d\n", __func__, errno);
+		}
+	} else {
+		fprintf(stderr, "[%s]: socketpair() error!!\n", __func__);
+	}
+}
+
 void *video_task_reader(void *args)
 {
-	while(1) {
-		
+#ifdef USE_MULTI_THREAD
+	struct pollfd fds[1];
+    float* imgOrigin = NULL;    // camera image  
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = capture_sock[0];
+	fds[0].events = POLLIN;
+
+	if (!usecamera) {
+		for (int i = 0; i < MJPEG_OUT_BUF_NR - 1; i++) {
+        	LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin);
+			int nwritten = write(capture_sock[0], &imgOrigin, sizeof(imgOrigin));
+		}
 	}
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int tmp, nread;
+		nread = read(capture_sock[0], &tmp, sizeof(tmp));
+		assert(nread == sizeof(tmp));
+
+		if (usecamera)
+        {
+            if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
+                printf("failed to capture RGBA image from camera\n");
+        }
+        else
+        {
+            if (!LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin)) {
+				printf("Load Failed\n");
+				assert(0);
+            }
+			int nwritten = write(capture_sock[0], &imgOrigin, sizeof(imgOrigin));
+			printf("[%s] write capture_sock[0] = %d\n", __func__, nwritten);
+        }
+	}
+#endif
 	return NULL;
 }
 
@@ -288,7 +367,10 @@ int camera_face_recognition(int argc, char *argv[])
 
     listen_port =atoi(argv[1]);
 
-    if (argc==2) usecamera=true;
+    if (argc==2)
+		usecamera = true;
+	else
+		video_path = argv[2];
 
     if (usecamera)
     {
@@ -307,13 +389,17 @@ int camera_face_recognition(int argc, char *argv[])
     }
     else
     {
-        if (!OpenMotionJpegFile(&MotionJpegFd,argv[2], &imgWidth, &imgHeight))
+        if (!OpenMotionJpegFile(&MotionJpegFd, video_path, &imgWidth, &imgHeight))
         {
-            printf("ERROR! Unable to open file %s\n",argv[2]);
+            printf("ERROR! Unable to open file %s\n",video_path);
             return -1;
         }
-
     }
+
+#ifdef USE_MULTI_THREAD
+	comm_socket_init(capture_sock);
+	pthread_create(&tids[0], NULL, video_task_reader, NULL);
+#endif
 
     mtcnn finder(imgHeight, imgWidth);              // build OR deserialize TensorRT detection network
 
@@ -338,9 +424,6 @@ int camera_face_recognition(int argc, char *argv[])
     // get the possible class names
     classifier.get_label_encoding(&label_encodings);
 
-
-
-
     if  ((TcpListenPort=OpenTcpListenPort(listen_port))==NULL)  // Open TCP Network port
     {
         printf("OpenTcpListenPortFailed\n");
@@ -362,32 +445,50 @@ int camera_face_recognition(int argc, char *argv[])
 
     // ------------------ "Detection" Loop -----------------------
     struct timespec tspecs[10];
+
+#ifdef USE_MULTI_THREAD
+	struct pollfd fds[1];
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = capture_sock[1];
+	fds[0].events = POLLIN;
+	int ret;
+#endif
+
     while(!user_quit){
 		int count = 0;
+	    float* imgOrigin = NULL;    // camera image  
+
         clk = clock();              // fps clock
         clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
-        float* imgOrigin = NULL;    // camera image  
+#ifdef USE_MULTI_THREAD
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
 
+		int nread = read(capture_sock[1], &imgOrigin, sizeof(imgOrigin));
+		assert(nread == sizeof(imgOrigin));
+		printf("[%s] read capture_sock[1] = %d\n", __func__, nread);
+		write(capture_sock[1], &nread, sizeof(nread));
+#endif
         //cv::Mat   imgOriginMjpeg;
 
         // the 2nd arg 1000 defines timeout, true is for the "zeroCopy" param what means the image will be stored to shared memory    
 
+#ifndef USE_MULTI_THREAD
         if (usecamera)
         {
-
             if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
                 printf("failed to capture RGBA image from camera\n");
         }
         else
         {
-
-
-            if (!LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin)) printf("Load Failed\n");
-            FrameCount++;
-            printf("FrameCount %d\n",FrameCount);
-
+            if (!LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin))
+				printf("Load Failed\n");
         }
+#endif
 
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         //since the captured image is located at shared memory, we also can access it from cpu n
@@ -402,7 +503,6 @@ int camera_face_recognition(int argc, char *argv[])
 
         // create GpuMat form the same image thanks to shared memory
         cv::cuda::GpuMat imgRGB_gpu(imgHeight, imgWidth, CV_8UC3, rgb_gpu);
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         // pass the image to the MTCNN and get face detections
         std::vector<struct Bbox> detections;
@@ -415,7 +515,6 @@ int camera_face_recognition(int argc, char *argv[])
         std::vector<cv::Rect> rects;
         std::vector<float*> keypoints;
         num_dets = get_detections(origin_cpu, &detections, &rects, &keypoints);               
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         // if faces detected
         if(num_dets > 0 && config_face_recognition){
             // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
@@ -465,11 +564,9 @@ int camera_face_recognition(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-
     int state = 0;
 
     state = camera_face_recognition( argc, argv );
-
 
     if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
 
