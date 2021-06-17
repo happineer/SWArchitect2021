@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <sys/timerfd.h>
 
 #include "mtcnn.h"
 #include "kernels.h"
@@ -81,8 +82,88 @@ static TMotionJpegFileDesc MotionJpegFd;
 static int imgWidth;
 static int imgHeight;
 
+static int video_fps;
+static int video_frames;
+
+
 static int capture_sock[2];
 static int sender_sock[2];
+
+
+#define handle_error(msg) \
+		do { perror(msg); exit(EXIT_FAILURE); } while (0)
+
+
+int timerfd_disarm(int fd)
+{
+	struct itimerspec new_value;
+
+	if (fd == -1)
+		return -1;
+
+	memset(&new_value, 0, sizeof(new_value));
+
+	if (timerfd_settime(fd, 0, &new_value, NULL) == -1)
+		handle_error("timerfd_settime disarm");
+
+//	fprintf(stdout, "[%s] timerfd : %d\n", __func__, fd);
+
+	return 0;
+}
+
+int timerfd_mod(int fd, int period_sec)
+{
+	struct itimerspec mod_val;
+	struct timespec now;
+	if (fd < 0)
+		return -1;
+
+	if (timerfd_disarm(fd) < 0)
+		return -1;
+
+	if (period_sec) {
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		mod_val.it_value.tv_sec = now.tv_sec + period_sec;
+		mod_val.it_value.tv_nsec = now.tv_nsec;
+		mod_val.it_interval.tv_sec = period_sec;
+		mod_val.it_interval.tv_nsec = 0;
+
+		if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &mod_val, NULL) < 0)
+			return -1;
+	}
+
+	return 0;
+}
+
+int timerfd_open(int init_sec, int period_sec)
+{
+	int fd;
+	struct itimerspec time_val;
+	struct timespec now;
+
+	fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+	if (fd < 0) {
+		return -1;
+	}
+
+	if (init_sec || period_sec) {
+		clock_gettime(CLOCK_MONOTONIC, &now);
+
+		time_val.it_value.tv_sec = now.tv_sec + init_sec;
+		time_val.it_value.tv_nsec = now.tv_nsec;
+		time_val.it_interval.tv_sec = period_sec;
+		time_val.it_interval.tv_nsec = 0;
+
+		if (timerfd_settime(fd, TFD_TIMER_ABSTIME, &time_val, NULL) < 0) {
+			close(fd);
+			return -1;
+		}
+	}
+
+	return fd;
+}
+
+
 
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -347,36 +428,68 @@ struct send_msg {
 	cv::Mat *Image;
 };
 
+static void send_jpeg(void)
+{
+	int nread;
+	struct send_msg msg;
+
+	nread = read(sender_sock[1], &msg, sizeof(msg));
+	assert(nread == sizeof(msg));
+		
+	//Render captured image
+	if (TcpSendImageAsJpeg(msg.TcpConnectedPort, *msg.Image) < 0) {
+		assert(0);
+	}
+	delete msg.Image;
+	video_frames++;
+}
+
+static void handle_timer(int fd)
+{
+	static int old_frames = 0;
+	uint64_t val[1];
+	int idx;
+
+	lseek(fd, 0, SEEK_SET);
+	if (read(fd, &val, sizeof(uint64_t)) <= 0)
+		return;
+
+	video_fps = video_frames - old_frames;
+	old_frames = video_frames;
+	printf("[%s] video fps = %d\n", __func__, video_fps);
+}
+
 void *video_task_sender(void *args)
 {
 #ifdef USE_MULTI_THREAD
-	struct pollfd fds[1];
+	struct pollfd fds[2];
+	int timerfd;
+
+	timerfd = timerfd_open(1, 1);
 
 	memset(fds, 0, sizeof(fds));
 	fds[0].fd = sender_sock[1];
 	fds[0].events = POLLIN;
 
+	fds[1].fd = timerfd;
+	fds[1].events = POLLIN;
+
 	int ret;
 
-	struct send_msg msg;
-
 	while (1) {
-		ret = poll(fds, 1, 1000);
+		ret = poll(fds, 2, 1000);
 		if (ret <= 0) {
 			printf("[%s] ret = %d\n", __func__, ret);
 			continue;
 		}
 	
-		int nread;
-		nread = read(sender_sock[1], &msg, sizeof(msg));
-		assert(nread == sizeof(msg));
-		
-		//Render captured image
-	    if (TcpSendImageAsJpeg(msg.TcpConnectedPort, *msg.Image) < 0) {
-			assert(0);
-			return NULL;
-	    }
-		delete msg.Image;
+		if (fds[0].revents & POLLIN) {
+			send_jpeg();
+		}
+
+		if (fds[1].revents & POLLIN) {
+			handle_timer(fds[1].fd);
+		}
 	}
 	
 #endif
@@ -582,6 +695,10 @@ int camera_face_recognition(int argc, char *argv[])
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         char str[256];
         sprintf(str, "TensorRT  %.0f FPS", fps);               // print the FPS to the bar
+
+#ifdef USE_MULTI_THREAD
+		sprintf(str, "TensorRT  %d FPS", video_fps);
+#endif
 
         cv::putText(origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
