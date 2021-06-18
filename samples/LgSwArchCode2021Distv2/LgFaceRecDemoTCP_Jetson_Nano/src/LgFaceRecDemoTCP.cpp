@@ -60,7 +60,9 @@ unsigned int FrameCount=0;
 /***********************************************************************************************/
 /***********************************************************************************************/
 
-#define MJPEG_OUT_BUF_NR		4
+#define MJPEG_OUT_BUF_NR		8
+#define MJPEG_PRE_BUF_NR		2
+
 typedef struct {
     ifstream    mpegfile;
     int         width;
@@ -376,7 +378,7 @@ void *video_task_reader(void *args)
 	fds[0].events = POLLIN;
 
 	if (!usecamera) {
-		for (int i = 0; i < MJPEG_OUT_BUF_NR - 1; i++) {
+		for (int i = 0; i < MJPEG_PRE_BUF_NR; i++) {
         	LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin);
 			int nwritten = write(capture_sock[0], &imgOrigin, sizeof(imgOrigin));
 		}
@@ -437,7 +439,7 @@ static void send_jpeg(void)
 	assert(nread == sizeof(msg));
 		
 	//Render captured image
-	if (TcpSendImageAsJpeg(msg.TcpConnectedPort, *msg.Image) < 0) {
+	if (TcpSendImageAsJpeg(msg.TcpConnectedPort, msg.Image) < 0) {
 		assert(0);
 	}
 	delete msg.Image;
@@ -654,8 +656,8 @@ int camera_face_recognition(int argc, char *argv[])
         //since the captured image is located at shared memory, we also can access it from cpu n
         // here I define a cv::Mat for it to draw onto the image from CPU without copying data -- TODO: draw from CUDA
         if (usecamera) cudaRGBA32ToBGRA32(  (float4*)imgOrigin,  (float4*)imgOrigin, imgWidth, imgHeight); //ADDED DP
-        cv::Mat origin_cpu(imgHeight, imgWidth, CV_32FC4, imgOrigin);
-        //cv::Mat *origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, imgOrigin);
+        //cv::Mat origin_cpu(imgHeight, imgWidth, CV_32FC4, imgOrigin);
+        cv::Mat *origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, imgOrigin);
 
         // the mtcnn pipeline is based on GpuMat 8bit values 3 channels while the captured image is RGBA32
         // i use a kernel from jetson-inference to remove the A-channel and float to uint8
@@ -674,7 +676,7 @@ int camera_face_recognition(int argc, char *argv[])
         // check if faces were detected, get face locations, bounding boxes and keypoints
         std::vector<cv::Rect> rects;
         std::vector<float*> keypoints;
-        num_dets = get_detections(origin_cpu, &detections, &rects, &keypoints);               
+        num_dets = get_detections(*origin_cpu, &detections, &rects, &keypoints);               
         // if faces detected
         if(num_dets > 0 && config_face_recognition){
             // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
@@ -690,7 +692,7 @@ int camera_face_recognition(int argc, char *argv[])
             classifier.prediction(&face_embeddings, &face_labels);                 
 
             // draw bounding boxes and labels to the original image 
-            draw_detections(origin_cpu, &rects, &face_labels, &label_encodings);    
+            draw_detections(*origin_cpu, &rects, &face_labels, &label_encodings);    
         }
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         char str[256];
@@ -700,23 +702,21 @@ int camera_face_recognition(int argc, char *argv[])
 		sprintf(str, "TensorRT  %d FPS", video_fps);
 #endif
 
-        cv::putText(origin_cpu, str, cv::Point(0, 20),
+        cv::putText(*origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
-        cv::putText(origin_cpu, str, cv::Point(0, 20),
+        cv::putText(*origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
 
 		 //Render captured image
 #ifdef USE_MULTI_THREAD
 		 struct send_msg msg;
-		 cv::Mat *img = new cv::Mat;
-		 *img = origin_cpu.clone();
-		 //delete origin_cpu;
 
 		 msg.TcpConnectedPort = TcpConnectedPort;
-		 msg.Image = img;
+		 msg.Image = origin_cpu;
 		 write(sender_sock[0], &msg, sizeof(msg));
 #else
         if (TcpSendImageAsJpeg(TcpConnectedPort, origin_cpu) < 0)  break;
+		delete origin_cpu;
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 #endif
 
@@ -737,10 +737,26 @@ int camera_face_recognition(int argc, char *argv[])
 
 
 
+static int set_rt_policy(int pid)
+{
+	struct sched_param sparam;
+    int policy = SCHED_RR/*SCHED_FIFO*/;
+
+	nice(-20);
+	sparam.sched_priority = 50;
+	if (sched_setscheduler(pid, policy, &sparam)) {
+		perror("setscheduler");
+		return -1;
+	}
+	return 0;
+}
+
 
 int main(int argc, char *argv[])
 {
     int state = 0;
+
+	set_rt_policy(getpid());
 
     state = camera_face_recognition( argc, argv );
 
