@@ -63,12 +63,23 @@ unsigned int FrameCount=0;
 #define MJPEG_OUT_BUF_NR		8
 #define MJPEG_PRE_BUF_NR		2
 
+
+struct video_buffer {
+	void *output;
+	cv::Mat *origin_cpu;
+	cv::cuda::GpuMat *imgRGB_gpu;
+	uchar* rgb_gpu;
+    uchar* rgb_cpu;
+    uchar* cropped_buffer_gpu[2];
+    uchar* cropped_buffer_cpu[2];
+};
+
 typedef struct {
     ifstream    mpegfile;
     int         width;
     int         height;
     void        *inputImgGPU;
-    void        *output[MJPEG_OUT_BUF_NR];
+    struct video_buffer buffer[MJPEG_OUT_BUF_NR];
     imageFormat inputFormat;
     size_t      inputImageSize;
 
@@ -205,7 +216,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
     FileDesc->inputFormat = IMAGE_RGB8;
     FileDesc->inputImageSize = (FileDesc->width * FileDesc->height*(sizeof(uchar3) * 8))/8;
     FileDesc->inputImgGPU = NULL;
-	memset(FileDesc->output, 0, sizeof(FileDesc->output));
+	memset(FileDesc->buffer, 0, sizeof(FileDesc->buffer));
 
     // allocate CUDA buffer for the image
     const size_t imgSize = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
@@ -219,11 +230,21 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
     }
 
 	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
-	    if( !cudaAllocMapped(&FileDesc->output[i], imgSize) )
+		struct video_buffer *vp = &FileDesc->buffer[i];
+	    if( !cudaAllocMapped(&vp->output, imgSize) )
     	{
         	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
 	        return false;
     	}
+
+        vp->origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, vp->output);
+
+	    cudaAllocMapped( (void**) &vp->rgb_cpu, (void**) &vp->rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
+	    cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[0], (void**) &vp->cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
+    	cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[1], (void**) &vp->cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
+  
+        // create GpuMat form the same image thanks to shared memory
+        vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
 	}
 
     printf("Open width %d height %d\n",*Width,*Height);
@@ -241,7 +262,7 @@ static bool CloseMotionJpegFile(TMotionJpegFileDesc *FileDesc)
 
     CUDA(cudaFreeHost(FileDesc->inputImgGPU));
 	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
-	    CHECK(cudaFreeHost(FileDesc->output[i]))
+	    // TODO CHECK(cudaFreeHost(FileDesc->output[i]))
 	}
 
 }
@@ -249,7 +270,7 @@ static bool CloseMotionJpegFile(TMotionJpegFileDesc *FileDesc)
 /***********************************************************************************************/
 /***********************************************************************************************/
 
-static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, float4**  output)
+static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buffer **output)
 {
     unsigned int imagesize;
     unsigned char* buff;
@@ -286,14 +307,18 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, float4**  output)
 
     memcpy(FileDesc->inputImgGPU, img.data, imageFormatSize(FileDesc->inputFormat, FileDesc->width, FileDesc->height));
 
-    if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, FileDesc->output[out_idx], IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
+	struct video_buffer *vp = &FileDesc->buffer[out_idx];
+
+    if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, vp->output, IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
     {
         printf("LOG_IMAGE loadImage() -- failed to convert image \n");
         return false;
 
     }
 
-    *output=(float4*)FileDesc->output[out_idx];
+	cudaRGBA32ToRGB8((float4*)vp->output, (uchar3*)vp->rgb_gpu, imgWidth, imgHeight);  
+    *output = vp;
+    
 	out_idx = (out_idx + 1) % MJPEG_OUT_BUF_NR;
 
     FrameCount++;
@@ -371,7 +396,8 @@ void *video_task_reader(void *args)
 {
 #ifdef USE_MULTI_THREAD
 	struct pollfd fds[1];
-    float* imgOrigin = NULL;    // camera image  
+    struct video_buffer *buffer = NULL;
+	float* imgOrigin = NULL;    // camera image 
 
 	memset(fds, 0, sizeof(fds));
 	fds[0].fd = capture_sock[0];
@@ -379,8 +405,8 @@ void *video_task_reader(void *args)
 
 	if (!usecamera) {
 		for (int i = 0; i < MJPEG_PRE_BUF_NR; i++) {
-        	LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin);
-			int nwritten = write(capture_sock[0], &imgOrigin, sizeof(imgOrigin));
+        	LoadMotionJpegFrame(&MotionJpegFd, &buffer);
+			int nwritten = write(capture_sock[0], &buffer, sizeof(buffer));
 		}
 	}
 
@@ -403,11 +429,11 @@ void *video_task_reader(void *args)
         }
         else
         {
-            if (!LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin)) {
-				printf("Load Failed\n");
+            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
+				printf("Load Failed JPEG.. Maybe EOF\n");
 				assert(0);
             }
-			int nwritten = write(capture_sock[0], &imgOrigin, sizeof(imgOrigin));
+			int nwritten = write(capture_sock[0], &buffer, sizeof(buffer));
 			printf("[%s] write capture_sock[0] = %d\n", __func__, nwritten);
         }
 	}
@@ -442,7 +468,6 @@ static void send_jpeg(void)
 	if (TcpSendImageAsJpeg(msg.TcpConnectedPort, msg.Image) < 0) {
 		assert(0);
 	}
-	delete msg.Image;
 	video_frames++;
 }
 
@@ -567,6 +592,7 @@ int camera_face_recognition(int argc, char *argv[])
 
     // malloc shared memory for images for access with cpu and gpu without copying data
     // cudaAllocMapped is used from jetson-inference
+#if 0
     uchar* rgb_gpu = NULL;
     uchar* rgb_cpu = NULL;
     cudaAllocMapped( (void**) &rgb_cpu, (void**) &rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
@@ -574,6 +600,7 @@ int camera_face_recognition(int argc, char *argv[])
     uchar* cropped_buffer_cpu[2] = {NULL,NULL};
     cudaAllocMapped( (void**) &cropped_buffer_cpu[0], (void**) &cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
     cudaAllocMapped( (void**) &cropped_buffer_cpu[1], (void**) &cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
+#endif
 
     // calculate fps
     double fps = 0.0;
@@ -606,7 +633,7 @@ int camera_face_recognition(int argc, char *argv[])
     printf("Accepted connection Request\n");
 
     // ------------------ "Detection" Loop -----------------------
-    struct timespec tspecs[10];
+    struct timespec tspecs[12];
 
 #ifdef USE_MULTI_THREAD
 	struct pollfd fds[1];
@@ -618,7 +645,8 @@ int camera_face_recognition(int argc, char *argv[])
 
     while(!user_quit){
 		int count = 0;
-	    float* imgOrigin = NULL;    // camera image  
+	    //float* imgOrigin = NULL;    // camera image  
+	    struct video_buffer *buffer;
 
         clk = clock();              // fps clock
         clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
@@ -630,8 +658,8 @@ int camera_face_recognition(int argc, char *argv[])
 			continue;
 		}
 
-		int nread = read(capture_sock[1], &imgOrigin, sizeof(imgOrigin));
-		assert(nread == sizeof(imgOrigin));
+		int nread = read(capture_sock[1], &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
 		printf("[%s] read capture_sock[1] = %d\n", __func__, nread);
 		write(capture_sock[1], &nread, sizeof(nread));
 #endif
@@ -642,17 +670,24 @@ int camera_face_recognition(int argc, char *argv[])
 #ifndef USE_MULTI_THREAD
         if (usecamera)
         {
-            if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
+            if( !g_camera->CaptureRGBA(&buffer, 1000, true))                                   
                 printf("failed to capture RGBA image from camera\n");
         }
         else
         {
-            if (!LoadMotionJpegFrame(&MotionJpegFd, (float4**)&imgOrigin))
+            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer))
 				printf("Load Failed\n");
         }
 #endif
 
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
+#ifdef USE_MULTI_THREAD
+        // the mtcnn pipeline is based on GpuMat 8bit values 3 channels while the captured image is RGBA32
+        // i use a kernel from jetson-inference to remove the A-channel and float to uint8
+
+		// JHH remove
+		//cudaRGBA32ToRGB8( (float4*)imgOrigin, (uchar3*)rgb_gpu, imgWidth, imgHeight );      
+#else
         //since the captured image is located at shared memory, we also can access it from cpu n
         // here I define a cv::Mat for it to draw onto the image from CPU without copying data -- TODO: draw from CUDA
         if (usecamera) cudaRGBA32ToBGRA32(  (float4*)imgOrigin,  (float4*)imgOrigin, imgWidth, imgHeight); //ADDED DP
@@ -666,45 +701,49 @@ int camera_face_recognition(int argc, char *argv[])
         // create GpuMat form the same image thanks to shared memory
         cv::cuda::GpuMat imgRGB_gpu(imgHeight, imgWidth, CV_8UC3, rgb_gpu);
 
+#endif
         // pass the image to the MTCNN and get face detections
         std::vector<struct Bbox> detections;
 		if (config_face_detection) {
-        	finder.findFace(imgRGB_gpu, &detections);
+        	finder.findFace(*buffer->imgRGB_gpu, &detections);
 		}
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         // check if faces were detected, get face locations, bounding boxes and keypoints
         std::vector<cv::Rect> rects;
         std::vector<float*> keypoints;
-        num_dets = get_detections(*origin_cpu, &detections, &rects, &keypoints);               
+        num_dets = get_detections(*buffer->origin_cpu, &detections, &rects, &keypoints);
         // if faces detected
         if(num_dets > 0 && config_face_recognition){
             // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
             std::vector<matrix<rgb_pixel>> faces;                                   
-            crop_and_align_faces(imgRGB_gpu, cropped_buffer_gpu, cropped_buffer_cpu, &rects, &faces, &keypoints);
+            crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, &rects, &faces, &keypoints);
+			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
             // generate face embeddings from the cropped faces and store them in a vector
             std::vector<matrix<float,0,1>> face_embeddings;
-            embedder.embeddings(&faces, &face_embeddings);                        
+            embedder.embeddings(&faces, &face_embeddings);
+			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
             // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
             std::vector<double> face_labels;
-            classifier.prediction(&face_embeddings, &face_labels);                 
+            classifier.prediction(&face_embeddings, &face_labels);
+			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
             // draw bounding boxes and labels to the original image 
-            draw_detections(*origin_cpu, &rects, &face_labels, &label_encodings);    
+            draw_detections(*buffer->origin_cpu, &rects, &face_labels, &label_encodings);
+			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         }
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
+		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         char str[256];
         sprintf(str, "TensorRT  %.0f FPS", fps);               // print the FPS to the bar
 
 #ifdef USE_MULTI_THREAD
 		sprintf(str, "TensorRT  %d FPS", video_fps);
 #endif
-
-        cv::putText(*origin_cpu, str, cv::Point(0, 20),
+        cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
-        cv::putText(*origin_cpu, str, cv::Point(0, 20),
+        cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
                 cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
 
 		 //Render captured image
@@ -712,24 +751,24 @@ int camera_face_recognition(int argc, char *argv[])
 		 struct send_msg msg;
 
 		 msg.TcpConnectedPort = TcpConnectedPort;
-		 msg.Image = origin_cpu;
+		 msg.Image = buffer->origin_cpu;
 		 write(sender_sock[0], &msg, sizeof(msg));
 #else
         if (TcpSendImageAsJpeg(TcpConnectedPort, origin_cpu) < 0)  break;
-		delete origin_cpu;
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
+		//delete origin_cpu;
+		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 #endif
 
-		compute_duration(tspecs, count, num_dets);
+		if (num_dets > 0) compute_duration(tspecs, count, num_dets);
 
         // smooth FPS to make it readable
         fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
 
     SAFE_DELETE(g_camera);
-    CHECK(cudaFreeHost(rgb_cpu));
-    CHECK(cudaFreeHost(cropped_buffer_cpu[0]));
-    CHECK(cudaFreeHost(cropped_buffer_cpu[1]));
+    //TODO : CHECK(cudaFreeHost(rgb_cpu));
+    //TODO : CHECK(cudaFreeHost(cropped_buffer_cpu[0]));
+    //TODO : CHECK(cudaFreeHost(cropped_buffer_cpu[1]));
     CloseTcpConnectedPort(&TcpConnectedPort); // Close network port;
     CloseTcpListenPort(&TcpListenPort);  // Close listen port
     return 0;
