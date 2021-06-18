@@ -72,6 +72,7 @@ struct video_buffer {
     uchar* rgb_cpu;
     uchar* cropped_buffer_gpu[2];
     uchar* cropped_buffer_cpu[2];
+	std::vector<struct Bbox> *detections;
 };
 
 typedef struct {
@@ -245,6 +246,9 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
   
         // create GpuMat form the same image thanks to shared memory
         vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
+
+		vp->detections = new std::vector<struct Bbox>(10);
+		
 	}
 
     printf("Open width %d height %d\n",*Width,*Height);
@@ -703,16 +707,16 @@ int camera_face_recognition(int argc, char *argv[])
 
 #endif
         // pass the image to the MTCNN and get face detections
-        std::vector<struct Bbox> detections;
+        buffer->detections->clear();
 		if (config_face_detection) {
-        	finder.findFace(*buffer->imgRGB_gpu, &detections);
+        	finder.findFace(*buffer->imgRGB_gpu, buffer->detections);
 		}
 		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 
         // check if faces were detected, get face locations, bounding boxes and keypoints
         std::vector<cv::Rect> rects;
         std::vector<float*> keypoints;
-        num_dets = get_detections(*buffer->origin_cpu, &detections, &rects, &keypoints);
+        num_dets = get_detections(*buffer->origin_cpu, buffer->detections, &rects, &keypoints);
         // if faces detected
         if(num_dets > 0 && config_face_recognition){
             // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
