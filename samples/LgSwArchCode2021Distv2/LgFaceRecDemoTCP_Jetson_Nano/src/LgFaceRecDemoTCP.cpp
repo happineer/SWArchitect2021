@@ -73,6 +73,7 @@ struct video_buffer {
     uchar* cropped_buffer_gpu[2];
     uchar* cropped_buffer_cpu[2];
 	std::vector<struct Bbox> *detections;
+	TTcpConnectedPort *TcpConnectedPort;
 };
 
 typedef struct {
@@ -455,21 +456,16 @@ void *video_task_recognizer(void *args)
 	return NULL;
 }
 
-struct send_msg {
-	TTcpConnectedPort *TcpConnectedPort;
-	cv::Mat *Image;
-};
-
 static void send_jpeg(void)
 {
 	int nread;
-	struct send_msg msg;
+	struct video_buffer *buffer;
 
-	nread = read(sender_sock[1], &msg, sizeof(msg));
-	assert(nread == sizeof(msg));
+	nread = read(sender_sock[1], &buffer, sizeof(buffer));
+	assert(nread == sizeof(buffer));
 		
 	//Render captured image
-	if (TcpSendImageAsJpeg(msg.TcpConnectedPort, msg.Image) < 0) {
+	if (TcpSendImageAsJpeg(buffer->TcpConnectedPort, buffer->origin_cpu) < 0) {
 		assert(0);
 	}
 	video_frames++;
@@ -752,14 +748,11 @@ int camera_face_recognition(int argc, char *argv[])
 
 		 //Render captured image
 #ifdef USE_MULTI_THREAD
-		 struct send_msg msg;
-
-		 msg.TcpConnectedPort = TcpConnectedPort;
-		 msg.Image = buffer->origin_cpu;
-		 write(sender_sock[0], &msg, sizeof(msg));
+		 buffer->TcpConnectedPort = TcpConnectedPort;
+		 write(sender_sock[0], &buffer, sizeof(buffer));
 #else
         if (TcpSendImageAsJpeg(TcpConnectedPort, origin_cpu) < 0)  break;
-		//delete origin_cpu;
+
 		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
 #endif
 
