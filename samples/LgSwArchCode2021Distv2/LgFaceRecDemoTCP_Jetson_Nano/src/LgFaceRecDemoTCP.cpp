@@ -463,6 +463,15 @@ static void send_jpeg(void)
 
 	nread = read(sender_sock[1], &buffer, sizeof(buffer));
 	assert(nread == sizeof(buffer));
+
+	char str[256];
+#ifdef USE_MULTI_THREAD
+	sprintf(str, "TensorRT  %d FPS", video_fps);
+#endif
+    cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
+    cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
 		
 	//Render captured image
 	if (TcpSendImageAsJpeg(buffer->TcpConnectedPort, buffer->origin_cpu) < 0) {
@@ -735,16 +744,6 @@ int camera_face_recognition(int argc, char *argv[])
 			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
         }
 		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-        char str[256];
-        sprintf(str, "TensorRT  %.0f FPS", fps);               // print the FPS to the bar
-
-#ifdef USE_MULTI_THREAD
-		sprintf(str, "TensorRT  %d FPS", video_fps);
-#endif
-        cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
-                cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
-        cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
-                cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
 
 		 //Render captured image
 #ifdef USE_MULTI_THREAD
