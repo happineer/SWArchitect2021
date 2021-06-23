@@ -45,6 +45,7 @@ enum TID_NAME {
 	TID_FACE_DETECT,
 	TID_FACE_RECOGNIZE,
 	TID_SENDER,
+	TID_NR,
 };
 
 static pthread_t tids[4];
@@ -63,6 +64,7 @@ unsigned int FrameCount=0;
 #define MJPEG_OUT_BUF_NR		8
 #define MJPEG_PRE_BUF_NR		2
 
+static int buffer_count = MJPEG_OUT_BUF_NR;
 
 struct video_buffer {
 	void *output;
@@ -89,6 +91,10 @@ typedef struct {
 
 struct task_info {
 	int running;
+	mtcnn *finder;
+	face_embedder *embedder;                         // deserialize recognition network 
+    face_classifier *classifier;          // train OR deserialize classification SVM's 
+    std::vector<std::string> *labels;
 };
 
 static struct task_info g_task_info;
@@ -101,8 +107,15 @@ static int video_fps;
 static int video_frames;
 
 
-static int capture_sock[2];
-static int sender_sock[2];
+struct ipc {
+	int sock[2];
+};
+
+struct ipc ipcs[4];
+
+#define IPC_SEND	0
+#define IPC_RECV	1
+
 
 
 #define handle_error(msg) \
@@ -399,21 +412,25 @@ static void comm_socket_init(int *sock)
 
 void *video_task_reader(void *args)
 {
+	int tid_prev = TID_SENDER;
+	int tid = TID_CAPTURE;
+	TTcpConnectedPort *TcpConnectedPort = NULL;
 #ifdef USE_MULTI_THREAD
 	struct pollfd fds[1];
     struct video_buffer *buffer = NULL;
 	float* imgOrigin = NULL;    // camera image 
 
 	memset(fds, 0, sizeof(fds));
-	fds[0].fd = capture_sock[0];
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
 	fds[0].events = POLLIN;
-
+#if 0
 	if (!usecamera) {
 		for (int i = 0; i < MJPEG_PRE_BUF_NR; i++) {
         	LoadMotionJpegFrame(&MotionJpegFd, &buffer);
-			int nwritten = write(capture_sock[0], &buffer, sizeof(buffer));
+			int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 		}
 	}
+#endif
 
 	int ret;
 	while(1) {
@@ -423,9 +440,18 @@ void *video_task_reader(void *args)
 			continue;
 		}
 
-		int tmp, nread;
-		nread = read(capture_sock[0], &tmp, sizeof(tmp));
-		assert(nread == sizeof(tmp));
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+
+		if (buffer->output == NULL) {
+			printf("[%s]: JHH start .....\n", __func__);
+			TcpConnectedPort = buffer->TcpConnectedPort;
+		}
+		else {
+			buffer_count++;
+		}
 
 		if (usecamera)
         {
@@ -434,36 +460,131 @@ void *video_task_reader(void *args)
         }
         else
         {
-            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
-				printf("Load Failed JPEG.. Maybe EOF\n");
-				assert(0);
-            }
-			int nwritten = write(capture_sock[0], &buffer, sizeof(buffer));
-			printf("[%s] write capture_sock[0] = %d\n", __func__, nwritten);
+			while (buffer_count > 1) {
+	            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
+					printf("Load Failed JPEG.. Maybe EOF\n");
+					assert(0);
+            	}
+				buffer->TcpConnectedPort = TcpConnectedPort;
+				int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+				buffer_count--;
+				printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+			}
         }
 	}
 #endif
 	return NULL;
 }
 
-void *video_task_detector(void *args)
+void do_face_detect(struct task_info *task, struct video_buffer *buffer)
 {
+	mtcnn *finder = task->finder;
+	// pass the image to the MTCNN and get face detections
+	buffer->detections->clear();
+	if (config_face_detection) {
+		finder->findFace(*buffer->imgRGB_gpu, buffer->detections);
+	}
+}
+
+void *video_task_face_detector(void *args)
+{
+	int tid_prev = TID_CAPTURE;
+	int tid = TID_FACE_DETECT;
+	struct task_info *task = (struct task_info *)args;
+
+	struct pollfd fds[1];
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
+	fds[0].events = POLLIN;
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+		
+		do_face_detect(task, buffer);
+		
+		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+		printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+	}
 	return NULL;
 }
 
-void *video_task_recognizer(void *args)
+void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
 {
+    int num_dets = 0;
+	std::vector<cv::Rect> rects;
+    std::vector<float*> keypoints;
+
+	if (!config_face_recognition) {
+		return;
+	}
+
+    num_dets = get_detections(*buffer->origin_cpu, buffer->detections, &rects, &keypoints);
+	if (num_dets <= 0)
+		return;
+
+    // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
+    std::vector<matrix<rgb_pixel>> faces;                                   
+    crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, &rects, &faces, &keypoints);
+
+    // generate face embeddings from the cropped faces and store them in a vector
+    std::vector<matrix<float,0,1>> face_embeddings;
+    task->embedder->embeddings(&faces, &face_embeddings);
+
+    // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
+    std::vector<double> face_labels;
+    task->classifier->prediction(&face_embeddings, &face_labels);
+
+    // draw bounding boxes and labels to the original image 
+    draw_detections(*buffer->origin_cpu, &rects, &face_labels, task->labels);
+}
+
+void *video_task_face_recognizer(void *args)
+{
+	int tid_prev = TID_FACE_DETECT;
+	int tid = TID_FACE_RECOGNIZE;
+	struct pollfd fds[1];
+	struct task_info *task = (struct task_info *)args;
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
+	fds[0].events = POLLIN;
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+		
+		do_face_recognize(task, buffer);
+		
+		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+		printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+	}
+	
 	return NULL;
 }
 
-static void send_jpeg(void)
+static void send_jpeg(struct video_buffer *buffer)
 {
 	int nread;
-	struct video_buffer *buffer;
-
-	nread = read(sender_sock[1], &buffer, sizeof(buffer));
-	assert(nread == sizeof(buffer));
-
 	char str[256];
 #ifdef USE_MULTI_THREAD
 	sprintf(str, "TensorRT  %d FPS", video_fps);
@@ -498,13 +619,16 @@ static void handle_timer(int fd)
 void *video_task_sender(void *args)
 {
 #ifdef USE_MULTI_THREAD
+	int tid_prev = TID_FACE_RECOGNIZE;
+	int tid = TID_SENDER;
+
 	struct pollfd fds[2];
 	int timerfd;
 
 	timerfd = timerfd_open(1, 1);
 
 	memset(fds, 0, sizeof(fds));
-	fds[0].fd = sender_sock[1];
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
 	fds[0].events = POLLIN;
 
 	fds[1].fd = timerfd;
@@ -520,7 +644,15 @@ void *video_task_sender(void *args)
 		}
 	
 		if (fds[0].revents & POLLIN) {
-			send_jpeg();
+			int nread;
+			struct video_buffer *buffer;
+			nread = read(fds[0].fd, &buffer, sizeof(buffer));
+			assert(nread == sizeof(buffer));
+
+			send_jpeg(buffer);
+
+			int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+			printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
 		}
 
 		if (fds[1].revents & POLLIN) {
@@ -589,14 +721,6 @@ int camera_face_recognition(int argc, char *argv[])
         }
     }
 
-#ifdef USE_MULTI_THREAD
-	comm_socket_init(capture_sock);
-	pthread_create(&tids[TID_CAPTURE], NULL, video_task_reader, NULL);
-
-	comm_socket_init(sender_sock);
-	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, NULL);
-#endif
-
     mtcnn finder(imgHeight, imgWidth);              // build OR deserialize TensorRT detection network
 
     // malloc shared memory for images for access with cpu and gpu without copying data
@@ -616,18 +740,31 @@ int camera_face_recognition(int argc, char *argv[])
     clock_t clk;
 
     // Detection vars
-    int num_dets = 0;
     std::vector<std::string> label_encodings;       // vector for the real names of the classes/persons
 
     // get the possible class names
     classifier.get_label_encoding(&label_encodings);
+
+	task->classifier = &classifier;
+	task->embedder = &embedder;
+	task->finder = &finder;
+	task->labels = &label_encodings;
+
+#ifdef USE_MULTI_THREAD
+	for (int i = 0; i < TID_NR; i++) {
+		comm_socket_init(ipcs[i].sock);
+	}
+	pthread_create(&tids[TID_CAPTURE], NULL, video_task_reader, task);
+	pthread_create(&tids[TID_FACE_DETECT], NULL, video_task_face_detector, task);
+	pthread_create(&tids[TID_FACE_RECOGNIZE], NULL, video_task_face_recognizer, task);
+	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, task);
+#endif
 
     if  ((TcpListenPort=OpenTcpListenPort(listen_port))==NULL)  // Open TCP Network port
     {
         printf("OpenTcpListenPortFailed\n");
         return(-1); 
     }
-
 
     clilen = sizeof(cli_addr);
 
@@ -641,124 +778,17 @@ int camera_face_recognition(int argc, char *argv[])
 
     printf("Accepted connection Request\n");
 
-    // ------------------ "Detection" Loop -----------------------
-    struct timespec tspecs[12];
-
-#ifdef USE_MULTI_THREAD
-	struct pollfd fds[1];
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = capture_sock[1];
-	fds[0].events = POLLIN;
-	int ret;
-#endif
+	struct video_buffer *buffer;
+	buffer = (struct video_buffer *)malloc(sizeof(struct video_buffer));
+	memset(buffer, 0, sizeof(buffer));
+	buffer->TcpConnectedPort = TcpConnectedPort;
+	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
 
     while(!user_quit){
-		int count = 0;
-	    //float* imgOrigin = NULL;    // camera image  
-	    struct video_buffer *buffer;
-
-        clk = clock();              // fps clock
-        clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-#ifdef USE_MULTI_THREAD
-		ret = poll(fds, 1, 1000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-
-		int nread = read(capture_sock[1], &buffer, sizeof(buffer));
-		assert(nread == sizeof(buffer));
-		printf("[%s] read capture_sock[1] = %d\n", __func__, nread);
-		write(capture_sock[1], &nread, sizeof(nread));
-#endif
-        //cv::Mat   imgOriginMjpeg;
-
-        // the 2nd arg 1000 defines timeout, true is for the "zeroCopy" param what means the image will be stored to shared memory    
-
-#ifndef USE_MULTI_THREAD
-        if (usecamera)
-        {
-            if( !g_camera->CaptureRGBA(&buffer, 1000, true))                                   
-                printf("failed to capture RGBA image from camera\n");
-        }
-        else
-        {
-            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer))
-				printf("Load Failed\n");
-        }
-#endif
-
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-#ifdef USE_MULTI_THREAD
-        // the mtcnn pipeline is based on GpuMat 8bit values 3 channels while the captured image is RGBA32
-        // i use a kernel from jetson-inference to remove the A-channel and float to uint8
-
-		// JHH remove
-		//cudaRGBA32ToRGB8( (float4*)imgOrigin, (uchar3*)rgb_gpu, imgWidth, imgHeight );      
-#else
-        //since the captured image is located at shared memory, we also can access it from cpu n
-        // here I define a cv::Mat for it to draw onto the image from CPU without copying data -- TODO: draw from CUDA
-        if (usecamera) cudaRGBA32ToBGRA32(  (float4*)imgOrigin,  (float4*)imgOrigin, imgWidth, imgHeight); //ADDED DP
-        //cv::Mat origin_cpu(imgHeight, imgWidth, CV_32FC4, imgOrigin);
-        cv::Mat *origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, imgOrigin);
-
-        // the mtcnn pipeline is based on GpuMat 8bit values 3 channels while the captured image is RGBA32
-        // i use a kernel from jetson-inference to remove the A-channel and float to uint8
-        cudaRGBA32ToRGB8( (float4*)imgOrigin, (uchar3*)rgb_gpu, imgWidth, imgHeight );      
-
-        // create GpuMat form the same image thanks to shared memory
-        cv::cuda::GpuMat imgRGB_gpu(imgHeight, imgWidth, CV_8UC3, rgb_gpu);
-
-#endif
-        // pass the image to the MTCNN and get face detections
-        buffer->detections->clear();
-		if (config_face_detection) {
-        	finder.findFace(*buffer->imgRGB_gpu, buffer->detections);
-		}
-		clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-        // check if faces were detected, get face locations, bounding boxes and keypoints
-        std::vector<cv::Rect> rects;
-        std::vector<float*> keypoints;
-        num_dets = get_detections(*buffer->origin_cpu, buffer->detections, &rects, &keypoints);
-        // if faces detected
-        if(num_dets > 0 && config_face_recognition){
-            // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
-            std::vector<matrix<rgb_pixel>> faces;                                   
-            crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, &rects, &faces, &keypoints);
-			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-            // generate face embeddings from the cropped faces and store them in a vector
-            std::vector<matrix<float,0,1>> face_embeddings;
-            embedder.embeddings(&faces, &face_embeddings);
-			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-            // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-            std::vector<double> face_labels;
-            classifier.prediction(&face_embeddings, &face_labels);
-			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-            // draw bounding boxes and labels to the original image 
-            draw_detections(*buffer->origin_cpu, &rects, &face_labels, &label_encodings);
-			clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-        }
-		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-
-		 //Render captured image
-#ifdef USE_MULTI_THREAD
-		 buffer->TcpConnectedPort = TcpConnectedPort;
-		 write(sender_sock[0], &buffer, sizeof(buffer));
-#else
-        if (TcpSendImageAsJpeg(TcpConnectedPort, origin_cpu) < 0)  break;
-
-		if (num_dets > 0) clock_gettime(CLOCK_MONOTONIC, &tspecs[count++]);
-#endif
-
-		if (num_dets > 0) compute_duration(tspecs, count, num_dets);
-
-        // smooth FPS to make it readable
-        fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
+		usleep(1000 * 1000);
+		printf("[%s] JHH running\n", __func__);
+		
+        //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
 
     SAFE_DELETE(g_camera);
