@@ -76,6 +76,13 @@ struct video_buffer {
     uchar* cropped_buffer_cpu[2];
 	std::vector<struct Bbox> *detections;
 	TTcpConnectedPort *TcpConnectedPort;
+
+	int num_dets;
+	std::vector<cv::Rect> *rects;
+    std::vector<float*> *keypoints;
+    std::vector<matrix<rgb_pixel>> *faces;                                   
+    std::vector<matrix<float,0,1>> *face_embeddings;
+    std::vector<double> *face_labels;
 };
 
 typedef struct {
@@ -262,7 +269,13 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
 
 		vp->detections = new std::vector<struct Bbox>(10);
-		
+
+		vp->num_dets = 0;
+		vp->rects = new std::vector<cv::Rect>(10);
+		vp->keypoints = new std::vector<float*>(10);
+		vp->faces = new std::vector<matrix<rgb_pixel>>(10);
+		vp->face_embeddings = new std::vector<matrix<float,0,1>>(10);
+		vp->face_labels = new std::vector<double>(10);
 	}
 
     printf("Open width %d height %d\n",*Width,*Height);
@@ -521,32 +534,32 @@ void *video_task_face_detector(void *args)
 
 void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
 {
-    int num_dets = 0;
-	std::vector<cv::Rect> rects;
-    std::vector<float*> keypoints;
+	buffer->num_dets = 0;
+	buffer->rects->clear();
+	buffer->keypoints->clear();
+	buffer->faces->clear();
+	buffer->face_embeddings->clear();
+	buffer->face_labels->clear();
 
 	if (!config_face_recognition) {
 		return;
 	}
 
-    num_dets = get_detections(*buffer->origin_cpu, buffer->detections, &rects, &keypoints);
-	if (num_dets <= 0)
+    buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
+	if (buffer->num_dets <= 0)
 		return;
 
     // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
-    std::vector<matrix<rgb_pixel>> faces;                                   
-    crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, &rects, &faces, &keypoints);
+    crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, buffer->rects, buffer->faces, buffer->keypoints);
 
     // generate face embeddings from the cropped faces and store them in a vector
-    std::vector<matrix<float,0,1>> face_embeddings;
-    task->embedder->embeddings(&faces, &face_embeddings);
+    task->embedder->embeddings(buffer->faces, buffer->face_embeddings);
 
     // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-    std::vector<double> face_labels;
-    task->classifier->prediction(&face_embeddings, &face_labels);
+    task->classifier->prediction(buffer->face_embeddings, buffer->face_labels);
 
     // draw bounding boxes and labels to the original image 
-    draw_detections(*buffer->origin_cpu, &rects, &face_labels, task->labels);
+    draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
 }
 
 void *video_task_face_recognizer(void *args)
