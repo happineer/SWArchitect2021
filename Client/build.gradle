@@ -11,6 +11,9 @@ repositories {
 }
 
 dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.31'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
@@ -20,7 +23,7 @@ test {
 }
 
 ext {
-    javaMainClass = "com.lge.cmuteam3.client.RecvImageTCP"
+    javaMainClass = "com.lge.cmuteam3.client.TcpClientMain"
 }
 
 application {
