@@ -43,7 +43,9 @@ static char *video_path;
 enum TID_NAME {
 	TID_CAPTURE = 1,
 	TID_FACE_DETECT,
-	TID_FACE_RECOGNIZE,
+	TID_FACE_CROP_ALIGN,
+	TID_FACE_EMBEDE,
+	TID_FACE_PREDICT,
 	TID_SENDER,
 	TID_NR,
 };
@@ -52,9 +54,10 @@ static pthread_t tids[4];
 
 void *video_task_reader(void *args);
 void *video_task_detector(void *args);
-void *video_task_recognizer(void *args);
+void *video_task_crop_align(void *args);
+void *video_task_embede(void *args);
+void *video_task_predict(void *args);
 void *video_task_sender(void *args);
-
 
 unsigned int FrameCount=0;
 /***********************************************************************************************/
@@ -118,12 +121,10 @@ struct ipc {
 	int sock[2];
 };
 
-struct ipc ipcs[4];
+struct ipc ipcs[TID_NR];
 
 #define IPC_SEND	0
 #define IPC_RECV	1
-
-
 
 #define handle_error(msg) \
 		do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -473,7 +474,7 @@ void *video_task_reader(void *args)
         }
         else
         {
-			while (buffer_count > 1) {
+			while (buffer_count > 2) {
 	            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
 					printf("Load Failed JPEG.. Maybe EOF\n");
 					assert(0);
@@ -481,7 +482,7 @@ void *video_task_reader(void *args)
 				buffer->TcpConnectedPort = TcpConnectedPort;
 				int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 				buffer_count--;
-				printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+				printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
 			}
         }
 	}
@@ -499,7 +500,7 @@ void do_face_detect(struct task_info *task, struct video_buffer *buffer)
 	}
 }
 
-void *video_task_face_detector(void *args)
+void *video_task_face_detect(void *args)
 {
 	int tid_prev = TID_CAPTURE;
 	int tid = TID_FACE_DETECT;
@@ -532,7 +533,7 @@ void *video_task_face_detector(void *args)
 	return NULL;
 }
 
-void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
+void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 {
 	buffer->num_dets = 0;
 	buffer->rects->clear();
@@ -541,31 +542,60 @@ void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
 	buffer->face_embeddings->clear();
 	buffer->face_labels->clear();
 
-	if (!config_face_recognition) {
+    buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
+	if (buffer->num_dets <= 0) {
+		printf("[%s]: $$$$$$ NO FACE : %d $$$$$$\n", __func__, buffer->num_dets);
 		return;
 	}
 
-    buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
-	if (buffer->num_dets <= 0)
-		return;
-
     // crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
     crop_and_align_faces(*buffer->imgRGB_gpu, buffer->cropped_buffer_gpu, buffer->cropped_buffer_cpu, buffer->rects, buffer->faces, buffer->keypoints);
+}
 
-    // generate face embeddings from the cropped faces and store them in a vector
+void do_face_embede(struct task_info *task, struct video_buffer *buffer)
+{
+	if (buffer->num_dets <= 0) {
+		printf("[%s]: $$$$$$ NO FACE : %d $$$$$$\n", __func__, buffer->num_dets);
+		return;
+	}
+
+	// generate face embeddings from the cropped faces and store them in a vector
     task->embedder->embeddings(buffer->faces, buffer->face_embeddings);
+}
 
-    // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-    task->classifier->prediction(buffer->face_embeddings, buffer->face_labels);
+void do_face_predict(struct task_info *task, struct video_buffer *buffer)
+{
+	if (buffer->num_dets <= 0) {
+		printf("[%s]: $$$$$$ NO FACE : %d $$$$$$\n", __func__, buffer->num_dets);
+		return;
+	}
+
+	// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
+	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels);
 
     // draw bounding boxes and labels to the original image 
     draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
 }
 
-void *video_task_face_recognizer(void *args)
+#if 0
+void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
+{
+	// crop and align the faces. Get faces to format for "dlib_face_recognition_model" to create embeddings
+	do_face_crop_and_align(task, buffer);
+
+	// generate face embeddings from the cropped faces and store them in a vector
+	do_face_embede(task, buffer);
+
+    // feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
+    // draw bounding boxes and labels to the original image 
+    do_face_predict(task, buffer);
+}
+#endif
+
+void *video_task_face_crop_align(void *args)
 {
 	int tid_prev = TID_FACE_DETECT;
-	int tid = TID_FACE_RECOGNIZE;
+	int tid = TID_FACE_CROP_ALIGN;
 	struct pollfd fds[1];
 	struct task_info *task = (struct task_info *)args;
 
@@ -586,7 +616,7 @@ void *video_task_face_recognizer(void *args)
 		nread = read(fds[0].fd, &buffer, sizeof(buffer));
 		assert(nread == sizeof(buffer));
 		
-		do_face_recognize(task, buffer);
+		do_face_crop_and_align(task, buffer);
 		
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 		printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
@@ -594,6 +624,75 @@ void *video_task_face_recognizer(void *args)
 	
 	return NULL;
 }
+
+void *video_task_face_embede(void *args)
+{
+	int tid_prev = TID_FACE_CROP_ALIGN;
+	int tid = TID_FACE_EMBEDE;
+	struct pollfd fds[1];
+	struct task_info *task = (struct task_info *)args;
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
+	fds[0].events = POLLIN;
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+		
+		do_face_embede(task, buffer);
+		
+		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+		printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+	}
+	
+	return NULL;
+}
+
+
+void *video_task_face_predict(void *args)
+{
+	int tid_prev = TID_FACE_EMBEDE;
+	int tid = TID_FACE_PREDICT;
+	struct pollfd fds[1];
+	struct task_info *task = (struct task_info *)args;
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
+	fds[0].events = POLLIN;
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+		
+		do_face_predict(task, buffer);
+		
+		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+		printf("[%s] write next ipc [0] = %d\n", __func__, nwritten);
+	}
+	
+	return NULL;
+}
+
+
 
 static void send_jpeg(struct video_buffer *buffer)
 {
@@ -632,7 +731,7 @@ static void handle_timer(int fd)
 void *video_task_sender(void *args)
 {
 #ifdef USE_MULTI_THREAD
-	int tid_prev = TID_FACE_RECOGNIZE;
+	int tid_prev = TID_FACE_PREDICT;
 	int tid = TID_SENDER;
 
 	struct pollfd fds[2];
@@ -768,8 +867,10 @@ int camera_face_recognition(int argc, char *argv[])
 		comm_socket_init(ipcs[i].sock);
 	}
 	pthread_create(&tids[TID_CAPTURE], NULL, video_task_reader, task);
-	pthread_create(&tids[TID_FACE_DETECT], NULL, video_task_face_detector, task);
-	pthread_create(&tids[TID_FACE_RECOGNIZE], NULL, video_task_face_recognizer, task);
+	pthread_create(&tids[TID_FACE_DETECT], NULL, video_task_face_detect, task);
+	pthread_create(&tids[TID_FACE_CROP_ALIGN], NULL, video_task_face_crop_align, task);
+	pthread_create(&tids[TID_FACE_EMBEDE], NULL, video_task_face_embede, task);
+	pthread_create(&tids[TID_FACE_PREDICT], NULL, video_task_face_predict, task);
 	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, task);
 #endif
 
