@@ -41,17 +41,18 @@ static bool usecamera = false;
 static char *video_path;
 
 enum TID_NAME {
-	TID_CAPTURE = 1,
+	TID_CAPTURE = 0,
 	TID_FACE_DETECT,
 
 	TID_FACE_RECOGNIZE1,
 	TID_FACE_RECOGNIZE2,
+	TID_FACE_RECOGNIZE3,
 
 	TID_SENDER,
 	TID_NR,
 };
 
-static pthread_t tids[4];
+static pthread_t tids[TID_NR];
 
 void *video_task_reader(void *args);
 void *video_task_detector(void *args);
@@ -65,8 +66,8 @@ unsigned int FrameCount=0;
 /***********************************************************************************************/
 /***********************************************************************************************/
 
-#define MJPEG_OUT_BUF_NR		16
-#define MJPEG_OUT_BUF_LOW		8
+#define MJPEG_OUT_BUF_NR		8
+#define MJPEG_OUT_BUF_LOW		1
 #define MJPEG_PRE_BUF_NR		2
 
 static int buffer_count = MJPEG_OUT_BUF_NR;
@@ -622,13 +623,14 @@ void *video_task_face_recognize1(void *args)
 
 		do_face_crop_and_align(task, buffer);
 
+#if 0
 		// generate face embeddings from the cropped faces and store them in a vector
 		do_face_embede(task, buffer);
 
 		// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
 	    // draw bounding boxes and labels to the original image 
 	    do_face_predict(task, buffer);
-		
+#endif
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
 	}
@@ -660,8 +662,9 @@ void *video_task_face_recognize2(void *args)
 		nread = read(fds[0].fd, &buffer, sizeof(buffer));
 		assert(nread == sizeof(buffer));
 
-		//////
-		
+		// generate face embeddings from the cropped faces and store them in a vector
+		do_face_embede(task, buffer);
+	
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
 	}
@@ -669,7 +672,40 @@ void *video_task_face_recognize2(void *args)
 	return NULL;
 }
 
+void *video_task_face_recognize3(void *args)
+{
+	int tid_prev = TID_FACE_RECOGNIZE2;
+	int tid = TID_FACE_RECOGNIZE3;
+	struct pollfd fds[1];
+	struct task_info *task = (struct task_info *)args;
 
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
+	fds[0].events = POLLIN;
+
+	int ret;
+	while(1) {
+		ret = poll(fds, 1, 1000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		int nread;
+		struct video_buffer *buffer;
+		nread = read(fds[0].fd, &buffer, sizeof(buffer));
+		assert(nread == sizeof(buffer));
+
+		// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
+	    // draw bounding boxes and labels to the original image 
+	    do_face_predict(task, buffer);
+		
+		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
+	}
+	
+	return NULL;
+}
 
 
 static void send_jpeg(struct video_buffer *buffer)
@@ -710,7 +746,7 @@ void *video_task_sender(void *args)
 {
 #ifdef USE_MULTI_THREAD
 
-	int tid_prev = TID_FACE_RECOGNIZE2;
+	int tid_prev = TID_FACE_RECOGNIZE3;
 	int tid = TID_SENDER;
 
 	struct pollfd fds[2];
@@ -848,6 +884,7 @@ int camera_face_recognition(int argc, char *argv[])
 	pthread_create(&tids[TID_FACE_DETECT], NULL, video_task_face_detect, task);
 	pthread_create(&tids[TID_FACE_RECOGNIZE1], NULL, video_task_face_recognize1, task);
 	pthread_create(&tids[TID_FACE_RECOGNIZE2], NULL, video_task_face_recognize2, task);
+	pthread_create(&tids[TID_FACE_RECOGNIZE3], NULL, video_task_face_recognize3, task);
 
 	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, task);
 #endif
