@@ -629,61 +629,13 @@ static void handle_timer(int fd)
 	printf("[%s] video fps = %d\n", __func__, video_fps);
 }
 
-void *video_task_sender(void *args)
-{
-	int tid_prev = TID_FACE_RECOGNIZE3;
-	int tid = TID_SENDER;
-
-	struct task_info *task = (struct task_info *)args;
-	struct pollfd fds[2];
-	int timerfd;
-
-	timerfd = timerfd_open(1, 1);
-
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
-	fds[0].events = POLLIN;
-
-	fds[1].fd = timerfd;
-	fds[1].events = POLLIN;
-
-	int ret;
-
-	while (1) {
-		ret = poll(fds, 2, 5000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-	
-		if (fds[0].revents & POLLIN) {
-			int nread;
-			struct video_buffer *buffer;
-			nread = read(fds[0].fd, &buffer, sizeof(buffer));
-			assert(nread == sizeof(buffer));
-
-			do_send_video(task, buffer);
-
-			int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-			printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
-		}
-
-		if (fds[1].revents & POLLIN) {
-			handle_timer(fds[1].fd);
-		}
-	}
-
-	return NULL;
-}
-
-
 static struct task_info g_task_info[TID_NR] = {
 	{ TID_CAPTURE,         video_task_reader,      /*do_capture*/ },
   	{ TID_FACE_DETECT,     video_task_face_detect, do_face_detect, },
 	{ TID_FACE_RECOGNIZE1, video_task_face_detect, do_face_crop_and_align, },
 	{ TID_FACE_RECOGNIZE2, video_task_face_detect, do_face_embede, },
 	{ TID_FACE_RECOGNIZE3, video_task_face_detect, do_face_predict, },
-	{ TID_SENDER,          video_task_sender,      /*do_send_video*/ }
+	{ TID_SENDER,          video_task_face_detect, do_send_video, }
 };
 
 // perform face recognition with Raspberry Pi camera
@@ -802,10 +754,27 @@ int camera_face_recognition(int argc, char *argv[])
 	buffer->TcpConnectedPort = TcpConnectedPort;
 	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
 	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
+	
+	struct pollfd fds[1];
+	int timerfd;
+	int ret;
+	
+	timerfd = timerfd_open(1, 1);
+	
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = timerfd;
+	fds[0].events = POLLIN;
 
-    while(!user_quit){
-		usleep(1000 * 1000);
-		printf("[%s] running\n", __func__);
+    while(!user_quit) {
+		ret = poll(fds, 1, 5000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		if (fds[0].revents & POLLIN) {
+			handle_timer(fds[0].fd);
+		}
 		
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
