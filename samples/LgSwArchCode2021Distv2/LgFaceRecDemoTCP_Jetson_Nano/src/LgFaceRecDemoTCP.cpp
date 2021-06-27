@@ -32,8 +32,6 @@
 #include "cudaColorspace.h"
 #include <memory>
 
-#define USE_MULTI_THREAD
-
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
@@ -104,6 +102,9 @@ typedef struct {
 } TMotionJpegFileDesc;
 
 struct task_info {
+	int tid;
+	void* (*task_func)(void *);
+	void (*do_work)(struct task_info *, struct video_buffer *);
 	int running;
 	mtcnn *finder;
 	face_embedder *embedder;                         // deserialize recognition network 
@@ -111,7 +112,6 @@ struct task_info {
     std::vector<std::string> *labels;
 };
 
-static struct task_info g_task_info;
 static gstCamera* g_camera = NULL;
 static TMotionJpegFileDesc MotionJpegFd;
 static int imgWidth;
@@ -394,7 +394,7 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	int diff;
 	char buf[256];
 
-	n += sprintf(buf, "JHH %d %d", count, ndets);
+	n += sprintf(buf, "DURATION %d %d", count, ndets);
 	for (i = 0; i < count - 1; i++) {
 		diff = (specs[i + 1].tv_sec - specs[i].tv_sec) * 1000000000ULL;
 		diff += specs[i + 1].tv_nsec - specs[i].tv_nsec;
@@ -434,7 +434,6 @@ void *video_task_reader(void *args)
 	int tid_prev = TID_SENDER;
 	int tid = TID_CAPTURE;
 	TTcpConnectedPort *TcpConnectedPort = NULL;
-#ifdef USE_MULTI_THREAD
 	struct pollfd fds[1];
     struct video_buffer *buffer = NULL;
 	float* imgOrigin = NULL;    // camera image 
@@ -453,7 +452,7 @@ void *video_task_reader(void *args)
 
 	int ret;
 	while(1) {
-		ret = poll(fds, 1, 1000);
+		ret = poll(fds, 1, 5000);
 		if (ret <= 0) {
 			printf("[%s] ret = %d\n", __func__, ret);
 			continue;
@@ -465,7 +464,7 @@ void *video_task_reader(void *args)
 		assert(nread == sizeof(buffer));
 
 		if (buffer->output == NULL) {
-			printf("[%s]: JHH start .....\n", __func__);
+			printf("[%s]: start .....\n", __func__);
 			TcpConnectedPort = buffer->TcpConnectedPort;
 		}
 		else {
@@ -488,10 +487,10 @@ void *video_task_reader(void *args)
 				int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 				buffer_count--;
 				printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
+				usleep(1000);
 			}
         }
 	}
-#endif
 	return NULL;
 }
 
@@ -507,9 +506,9 @@ void do_face_detect(struct task_info *task, struct video_buffer *buffer)
 
 void *video_task_face_detect(void *args)
 {
-	int tid_prev = TID_CAPTURE;
-	int tid = TID_FACE_DETECT;
 	struct task_info *task = (struct task_info *)args;
+	int tid = task->tid;
+	int tid_prev = (task->tid + TID_NR - 1) % TID_NR;
 
 	struct pollfd fds[1];
 
@@ -519,9 +518,9 @@ void *video_task_face_detect(void *args)
 
 	int ret;
 	while(1) {
-		ret = poll(fds, 1, 1000);
+		ret = poll(fds, 1, 5000);
 		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
+			printf("[%s] TID:%d PREV:%d ret = %d\n", __func__, tid, tid_prev, ret);
 			continue;
 		}
 
@@ -529,11 +528,12 @@ void *video_task_face_detect(void *args)
 		struct video_buffer *buffer;
 		nread = read(fds[0].fd, &buffer, sizeof(buffer));
 		assert(nread == sizeof(buffer));
-		
-		do_face_detect(task, buffer);
+
+		if (task->do_work)
+			task->do_work(task, buffer);
 		
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
+		printf("[%s] TID: %d, write next ipc fd = %d, buffer: %p\n", __func__, tid, ipcs[tid].sock[IPC_SEND], buffer);
 	}
 	return NULL;
 }
@@ -596,125 +596,12 @@ void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
     do_face_predict(task, buffer);
 }
 
-
-void *video_task_face_recognize1(void *args)
-{
-	int tid_prev = TID_FACE_DETECT;
-	int tid = TID_FACE_RECOGNIZE1;
-	struct pollfd fds[1];
-	struct task_info *task = (struct task_info *)args;
-
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
-	fds[0].events = POLLIN;
-
-	int ret;
-	while(1) {
-		ret = poll(fds, 1, 1000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-
-		int nread;
-		struct video_buffer *buffer;
-		nread = read(fds[0].fd, &buffer, sizeof(buffer));
-		assert(nread == sizeof(buffer));
-
-		do_face_crop_and_align(task, buffer);
-
-#if 0
-		// generate face embeddings from the cropped faces and store them in a vector
-		do_face_embede(task, buffer);
-
-		// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-	    // draw bounding boxes and labels to the original image 
-	    do_face_predict(task, buffer);
-#endif
-		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
-	}
-	
-	return NULL;
-}
-
-void *video_task_face_recognize2(void *args)
-{
-	int tid_prev = TID_FACE_RECOGNIZE1;
-	int tid = TID_FACE_RECOGNIZE2;
-	struct pollfd fds[1];
-	struct task_info *task = (struct task_info *)args;
-
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
-	fds[0].events = POLLIN;
-
-	int ret;
-	while(1) {
-		ret = poll(fds, 1, 1000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-
-		int nread;
-		struct video_buffer *buffer;
-		nread = read(fds[0].fd, &buffer, sizeof(buffer));
-		assert(nread == sizeof(buffer));
-
-		// generate face embeddings from the cropped faces and store them in a vector
-		do_face_embede(task, buffer);
-	
-		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
-	}
-	
-	return NULL;
-}
-
-void *video_task_face_recognize3(void *args)
-{
-	int tid_prev = TID_FACE_RECOGNIZE2;
-	int tid = TID_FACE_RECOGNIZE3;
-	struct pollfd fds[1];
-	struct task_info *task = (struct task_info *)args;
-
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
-	fds[0].events = POLLIN;
-
-	int ret;
-	while(1) {
-		ret = poll(fds, 1, 1000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-
-		int nread;
-		struct video_buffer *buffer;
-		nread = read(fds[0].fd, &buffer, sizeof(buffer));
-		assert(nread == sizeof(buffer));
-
-		// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-	    // draw bounding boxes and labels to the original image 
-	    do_face_predict(task, buffer);
-		
-		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-		printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
-	}
-	
-	return NULL;
-}
-
-
-static void send_jpeg(struct video_buffer *buffer)
+static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 {
 	int nread;
 	char str[256];
-#ifdef USE_MULTI_THREAD
+
 	sprintf(str, "TensorRT  %d FPS", video_fps);
-#endif
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
@@ -742,54 +629,14 @@ static void handle_timer(int fd)
 	printf("[%s] video fps = %d\n", __func__, video_fps);
 }
 
-void *video_task_sender(void *args)
-{
-#ifdef USE_MULTI_THREAD
-
-	int tid_prev = TID_FACE_RECOGNIZE3;
-	int tid = TID_SENDER;
-
-	struct pollfd fds[2];
-	int timerfd;
-
-	timerfd = timerfd_open(1, 1);
-
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
-	fds[0].events = POLLIN;
-
-	fds[1].fd = timerfd;
-	fds[1].events = POLLIN;
-
-	int ret;
-
-	while (1) {
-		ret = poll(fds, 2, 1000);
-		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-	
-		if (fds[0].revents & POLLIN) {
-			int nread;
-			struct video_buffer *buffer;
-			nread = read(fds[0].fd, &buffer, sizeof(buffer));
-			assert(nread == sizeof(buffer));
-
-			send_jpeg(buffer);
-
-			int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-			printf("[%s] write next ipc fd = %d, buffer: %p\n", __func__, ipcs[tid].sock[IPC_SEND], buffer);
-		}
-
-		if (fds[1].revents & POLLIN) {
-			handle_timer(fds[1].fd);
-		}
-	}
-	
-#endif
-	return NULL;
-}
+static struct task_info g_task_info[TID_NR] = {
+	{ TID_CAPTURE,         video_task_reader,      /*do_capture*/ },
+  	{ TID_FACE_DETECT,     video_task_face_detect, do_face_detect, },
+	{ TID_FACE_RECOGNIZE1, video_task_face_detect, do_face_crop_and_align, },
+	{ TID_FACE_RECOGNIZE2, video_task_face_detect, do_face_embede, },
+	{ TID_FACE_RECOGNIZE3, video_task_face_detect, do_face_predict, },
+	{ TID_SENDER,          video_task_face_detect, do_send_video, }
+};
 
 // perform face recognition with Raspberry Pi camera
 int camera_face_recognition(int argc, char *argv[])
@@ -799,8 +646,6 @@ int camera_face_recognition(int argc, char *argv[])
     struct sockaddr_in cli_addr;
     socklen_t          clilen;
     short              listen_port;
-	struct task_info *task = &g_task_info;
-
 
     // -------------- Initialization -------------------
 
@@ -871,23 +716,19 @@ int camera_face_recognition(int argc, char *argv[])
     // get the possible class names
     classifier.get_label_encoding(&label_encodings);
 
-	task->classifier = &classifier;
-	task->embedder = &embedder;
-	task->finder = &finder;
-	task->labels = &label_encodings;
-
-#ifdef USE_MULTI_THREAD
 	for (int i = 0; i < TID_NR; i++) {
 		comm_socket_init(ipcs[i].sock);
 	}
-	pthread_create(&tids[TID_CAPTURE], NULL, video_task_reader, task);
-	pthread_create(&tids[TID_FACE_DETECT], NULL, video_task_face_detect, task);
-	pthread_create(&tids[TID_FACE_RECOGNIZE1], NULL, video_task_face_recognize1, task);
-	pthread_create(&tids[TID_FACE_RECOGNIZE2], NULL, video_task_face_recognize2, task);
-	pthread_create(&tids[TID_FACE_RECOGNIZE3], NULL, video_task_face_recognize3, task);
 
-	pthread_create(&tids[TID_SENDER], NULL, video_task_sender, task);
-#endif
+	for (int i = 0; i < TID_NR; i++) {
+		struct task_info *task = &g_task_info[i];
+		task->classifier = &classifier;
+		task->embedder = &embedder;
+		task->finder = &finder;
+		task->labels = &label_encodings;
+
+		pthread_create(&tids[i], NULL, task->task_func, task);
+	}
 
     if  ((TcpListenPort=OpenTcpListenPort(listen_port))==NULL)  // Open TCP Network port
     {
@@ -912,10 +753,28 @@ int camera_face_recognition(int argc, char *argv[])
 	memset(buffer, 0, sizeof(buffer));
 	buffer->TcpConnectedPort = TcpConnectedPort;
 	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
+	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
+	
+	struct pollfd fds[1];
+	int timerfd;
+	int ret;
+	
+	timerfd = timerfd_open(1, 1);
+	
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = timerfd;
+	fds[0].events = POLLIN;
 
-    while(!user_quit){
-		usleep(1000 * 1000);
-		printf("[%s] JHH running\n", __func__);
+    while(!user_quit) {
+		ret = poll(fds, 1, 5000);
+		if (ret <= 0) {
+			printf("[%s] ret = %d\n", __func__, ret);
+			continue;
+		}
+
+		if (fds[0].revents & POLLIN) {
+			handle_timer(fds[0].fd);
+		}
 		
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
