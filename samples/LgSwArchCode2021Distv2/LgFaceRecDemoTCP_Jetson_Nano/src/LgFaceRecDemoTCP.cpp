@@ -32,6 +32,14 @@
 #include "cudaColorspace.h"
 #include <memory>
 
+
+//#define DEBUG_PRINT_ON
+#ifdef DEBUG_PRINT_ON
+	#define DEBUG(fmt, args...)		fprintf(stdout, "[DEBUG]: " fmt, ## args)
+#else
+	#define DEBUG(fmt, args...)
+#endif
+
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
@@ -111,6 +119,12 @@ struct task_info {
     face_classifier *classifier;          // train OR deserialize classification SVM's 
     std::vector<std::string> *labels;
 };
+
+struct __attribute__((packed)) cmd_msg {
+	__u32 type;
+	__u32 value;
+};
+
 
 static gstCamera* g_camera = NULL;
 static TMotionJpegFileDesc MotionJpegFd;
@@ -457,7 +471,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 			buffer->TcpConnectedPort = TcpConnectedPort;
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 			buffer_count--;
-			printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
+			DEBUG("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
 			usleep(1000);
 		}
     }
@@ -540,7 +554,7 @@ void *video_task_face_detect(void *args)
 			task->do_work(task, buffer);
 		
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-		printf("[%s] TID: %d, write next ipc fd = %d, buffer: %p\n", __func__, tid, ipcs[tid].sock[IPC_SEND], buffer);
+		DEBUG("[%s] TID: %d, write next ipc fd = %d, buffer: %p\n", __func__, tid, ipcs[tid].sock[IPC_SEND], buffer);
 	}
 	return NULL;
 }
@@ -555,9 +569,9 @@ void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 	buffer->face_labels->clear();
 
     buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
-	printf("[%s]: Frame # : %d FACE # : %d\n", __func__, buffer->frame_number, buffer->num_dets);
+	DEBUG("[%s]: Frame # : %d FACE # : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 	if (buffer->num_dets <= 0) {
-		printf("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
+		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
 
@@ -568,7 +582,7 @@ void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 void do_face_embede(struct task_info *task, struct video_buffer *buffer)
 {
 	if (buffer->num_dets <= 0) {
-		printf("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
+		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
 
@@ -579,7 +593,7 @@ void do_face_embede(struct task_info *task, struct video_buffer *buffer)
 void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 {
 	if (buffer->num_dets <= 0) {
-		printf("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
+		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
 
@@ -634,6 +648,17 @@ static void handle_timer(int fd)
 	video_fps = video_frames - old_frames;
 	old_frames = video_frames;
 	printf("[%s] video fps = %d\n", __func__, video_fps);
+}
+
+static void handle_client_msg(TTcpConnectedPort *tcpConnectedPort)
+{
+	struct cmd_msg msg;
+	int ret;
+
+	ret = ReadDataTcp(tcpConnectedPort, (unsigned char *)&msg, sizeof(msg));
+	assert(ret == sizeof(msg));
+
+	printf("[%s] client msg type : 0x%08X, value : 0x%08X\n", __func__, msg.type, msg.value);
 }
 
 static struct task_info g_task_info[TID_NR] = {
@@ -762,7 +787,7 @@ int camera_face_recognition(int argc, char *argv[])
 	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
 	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
 	
-	struct pollfd fds[1];
+	struct pollfd fds[2];
 	int timerfd;
 	int ret;
 	
@@ -772,15 +797,22 @@ int camera_face_recognition(int argc, char *argv[])
 	fds[0].fd = timerfd;
 	fds[0].events = POLLIN;
 
+	fds[1].fd = TcpConnectedPort->ConnectedFd;
+	fds[1].events = POLLIN;
+
     while(!user_quit) {
 		ret = poll(fds, 1, 5000);
 		if (ret <= 0) {
-			printf("[%s] ret = %d\n", __func__, ret);
+			DEBUG("[%s] ret = %d\n", __func__, ret);
 			continue;
 		}
 
 		if (fds[0].revents & POLLIN) {
 			handle_timer(fds[0].fd);
+		}
+
+		if (fds[1].revents & POLLIN) {
+			handle_client_msg(TcpConnectedPort);
 		}
 		
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
