@@ -429,14 +429,47 @@ static void comm_socket_init(int *sock)
 	}
 }
 
+void do_capture(struct task_info *task, struct video_buffer *buffer)
+{
+	static TTcpConnectedPort *TcpConnectedPort = NULL;
+	float* imgOrigin = NULL;	// camera image 
+
+	if (buffer->output == NULL) {
+		printf("[%s]: start .....\n", __func__);
+		TcpConnectedPort = buffer->TcpConnectedPort;
+	}
+	else {
+		buffer_count++;
+	}
+
+	if (usecamera)
+    {
+        if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))
+            printf("failed to capture RGBA image from camera\n");
+    }
+    else
+    {
+		while (buffer_count > MJPEG_OUT_BUF_LOW) {
+            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
+				printf("Load Failed JPEG.. Maybe EOF\n");
+				assert(0);
+			}
+			buffer->TcpConnectedPort = TcpConnectedPort;
+			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+			buffer_count--;
+			printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
+			usleep(1000);
+		}
+    }
+}
+
 void *video_task_reader(void *args)
 {
+	struct task_info *task = (struct task_info *)args;
 	int tid_prev = TID_SENDER;
 	int tid = TID_CAPTURE;
-	TTcpConnectedPort *TcpConnectedPort = NULL;
+
 	struct pollfd fds[1];
-    struct video_buffer *buffer = NULL;
-	float* imgOrigin = NULL;    // camera image 
 
 	memset(fds, 0, sizeof(fds));
 	fds[0].fd = ipcs[tid_prev].sock[IPC_RECV];
@@ -463,33 +496,7 @@ void *video_task_reader(void *args)
 		nread = read(fds[0].fd, &buffer, sizeof(buffer));
 		assert(nread == sizeof(buffer));
 
-		if (buffer->output == NULL) {
-			printf("[%s]: start .....\n", __func__);
-			TcpConnectedPort = buffer->TcpConnectedPort;
-		}
-		else {
-			buffer_count++;
-		}
-
-		if (usecamera)
-        {
-            if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))                                   
-                printf("failed to capture RGBA image from camera\n");
-        }
-        else
-        {
-			while (buffer_count > MJPEG_OUT_BUF_LOW) {
-	            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
-					printf("Load Failed JPEG.. Maybe EOF\n");
-					assert(0);
-            	}
-				buffer->TcpConnectedPort = TcpConnectedPort;
-				int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
-				buffer_count--;
-				printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
-				usleep(1000);
-			}
-        }
+		do_capture(task, buffer);
 	}
 	return NULL;
 }
