@@ -3,27 +3,46 @@ project(LgFaceRecDemoTCP)
 SET(CUDA_VERSION 10.0)
 FIND_PACKAGE(CUDA ${CUDA_VERSION} REQUIRED)
 
+set(ARCH ${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+
 add_definitions(-std=c++11)
 include_directories(/usr/local/cuda/include)
-include_directories(/home/lg/jetson-utils-master_latest/build/aarch64/include/jetson-utils)
+include_directories(/home/lg/jetson-utils-master_latest/build/${CMAKE_SYSTEM_PROCESSOR}/include/jetson-utils)
 include_directories(/home/lg/dlib-19.22/dlib/build)
 include_directories(/usr/include/gstreamer-1.0)
-include_directories(/usr/lib/aarch64-linux-gnu/gstreamer-1.0/include)
+include_directories(/usr/lib/${ARCH}/gstreamer-1.0/include)
 include_directories(/usr/include/glib-2.0)
 include_directories(/usr/include/libxml2 )
-include_directories(/usr/lib/aarch64-linux-gnu/glib-2.0/include)
+include_directories(/usr/lib/${ARCH}/glib-2.0/include)
 link_directories(/opt/cuda/lib64)
 link_directories(/usr/include )
 link_directories(/home/lg/dlib-19.22/dlib/build)
-
 
 find_package( OpenCV REQUIRED)
 find_package ( Boost REQUIRED COMPONENTS system filesystem)
 
 include_directories(${Boost_INCLUDE_DIRS})
 
-AUX_SOURCE_DIRECTORY(./src DIR_SRCS)
-cuda_add_executable( LgFaceRecDemoTCP ${DIR_SRCS} src/NetworkTCP.cpp src/NetworkTCP.h src/TcpSendRecvJpeg.cpp src/TcpSendRecvJpeg.h src/pnet_rt.cpp src/common.h src/common.cpp src/pnet_rt.h src/rnet_rt.cpp src/rnet_rt.h src/baseEngine.cpp src/baseEngine.h src/onet_rt.h src/onet_rt.cpp src/kernels.h src/kernels.cu src/face_embedder.h src/face_embedder.cpp src/alignment.h src/alignment.cpp src/face_classifier.h src/face_classifier.cpp)
+include_directories(src)
+
+set(CORE_SRCS
+    src/alignment.cpp 
+    src/baseEngine.cpp 
+    src/common.cpp 
+    src/face_classifier.cpp
+    src/face_embedder.cpp 
+    src/kernels.cu 
+    src/mtcnn.cpp
+    src/network.cpp
+    src/NetworkTCP.cpp 
+    src/onet_rt.cpp 
+    src/pnet_rt.cpp 
+    src/rnet_rt.cpp 
+    src/TcpSendRecvJpeg.cpp
+    )
+
+# AUX_SOURCE_DIRECTORY(./src DIR_SRCS)
+cuda_add_executable( LgFaceRecDemoTCP ${CORE_SRCS} src/LgFaceRecDemoTCP.cpp)
 
 
 set(CMAKE_CXX_FLAGS  "-lpthread")
@@ -44,9 +63,7 @@ target_link_libraries( LgFaceRecDemoTCP cudnn)
 target_link_libraries( LgFaceRecDemoTCP curand)
 target_link_libraries( LgFaceRecDemoTCP cusolver)
 target_link_libraries( LgFaceRecDemoTCP cublas)
-target_link_libraries( LgFaceRecDemoTCP /home/lg/jetson-utils-master_latest/build/aarch64/lib/libjetson-utils.so)
+target_link_libraries( LgFaceRecDemoTCP /home/lg/jetson-utils-master_latest/build/${CMAKE_SYSTEM_PROCESSOR}/lib/libjetson-utils.so)
 target_link_libraries( LgFaceRecDemoTCP jpeg )
 target_link_libraries( LgFaceRecDemoTCP png )
-
-
 

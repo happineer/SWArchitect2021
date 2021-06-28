@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group 'com.lge.cmuteam3'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '1.7.31'
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+ext {
+    javaMainClass = "com.lge.cmuteam3.client.TcpClientMain"
+}
+
+application {
+    mainClassName = javaMainClass
+}
