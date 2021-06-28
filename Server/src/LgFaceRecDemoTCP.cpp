@@ -61,11 +61,6 @@ enum TID_NAME {
 static pthread_t tids[TID_NR];
 
 void *video_task_reader(void *args);
-void *video_task_detector(void *args);
-void *video_task_recognize1(void *args);
-void *video_task_recognize2(void *args);
-
-void *video_task_sender(void *args);
 
 unsigned int FrameCount=0;
 /***********************************************************************************************/
