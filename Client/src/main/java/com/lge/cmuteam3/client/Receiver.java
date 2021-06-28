@@ -22,6 +22,10 @@ public class Receiver extends Thread {
 	Queue<BufferedImage> queue = new LinkedList<>();
 	boolean imageReady = false;
 	Socket tcpSocket;
+	
+	private transient boolean running = false;
+
+	private OnConnectListener onConnectlistener;
 
 	public Receiver(String address, int port){
 		this.address = address;
@@ -32,13 +36,19 @@ public class Receiver extends Thread {
 
 	private void receiveImages() {
 		try {
+			LOG.info("Connect socket");
 			tcpSocket = new Socket(address, port);
 			InputStream inputStream = tcpSocket.getInputStream();
 			long init = System.currentTimeMillis();
 
+			onConnectlistener.onConnected();
+			
+			running = true;
+			
 			/* Receiving loop */
 			int count = 0;
-			while (true) {
+			while (running) {
+				LOG.info("Connect socket3");
 				byte[] sizeAr = new byte[4];
 				readNBytes(inputStream, sizeAr, 0, 4);
 				int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
@@ -56,13 +66,16 @@ public class Receiver extends Thread {
 			}
 		} catch (ConnectException ce) {
 			LOG.error(ce.getMessage());
+			onConnectlistener.onFailed();
 		} catch (IOException e) {
 			e.printStackTrace();
+			onConnectlistener.onFailed();
 		} finally {
 			try {
 				if (tcpSocket != null) {
 					tcpSocket.close();
 				}
+				running = false;
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -71,6 +84,7 @@ public class Receiver extends Thread {
 
 	@Override
 	public void run() {
+		LOG.info("Receiver run");
 		receiveImages();
 	}
 
@@ -96,4 +110,12 @@ public class Receiver extends Thread {
         }
         return n;
     }
+	
+	public void stopSelf() {
+		this.running = false;
+	}
+
+	public void setOnConnectListener(OnConnectListener onConnectlistener) {
+		this.onConnectlistener = onConnectlistener;
+	}
 }

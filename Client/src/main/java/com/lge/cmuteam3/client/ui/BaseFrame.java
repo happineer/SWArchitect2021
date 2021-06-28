@@ -16,7 +16,9 @@ public class BaseFrame extends JFrame {
 	private JTextArea logArea;
 	private JLabel lblNewLabel;
 	private JScrollPane scrollPane;
-	private JPanel southPanel;
+
+	private JLabel labelServer;
+	private JTextField serverAddressTextField;
 
 	public JLabel getImageView() {
 		return imageView;
@@ -33,11 +35,15 @@ public class BaseFrame extends JFrame {
 	public JTextArea getLogArea() {
 		return logArea;
 	}
+	
+	public JTextField getServerAddressTextField() {
+		return serverAddressTextField;
+	}
 
 	public BaseFrame() {
 		setTitle("CMU Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 450, 300);
+		setBounds(100, 100, 750, 900);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
@@ -48,6 +54,14 @@ public class BaseFrame extends JFrame {
 
 		JPanel panel = new JPanel();
 		contentPane.add(panel, BorderLayout.NORTH);
+		
+		labelServer = new JLabel("Target Server");
+		panel.add(labelServer);
+		
+		serverAddressTextField = new JTextField();
+		panel.add(serverAddressTextField);
+		serverAddressTextField.setColumns(12);
+		serverAddressTextField.setEditable(false);
 
 		lblNewLabel = new JLabel("Run Mode");
 		panel.add(lblNewLabel);
