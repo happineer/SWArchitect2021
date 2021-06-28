@@ -1,0 +1,10 @@
++
+num classes: 7
+#	label:	images:
+0	Dan_Plakosh	2
+1	Chandler	3
+2	Joey	3
+3	Ross	4
+4	Phoebe	4
+5	Monica	4
+6	Rachel	6
