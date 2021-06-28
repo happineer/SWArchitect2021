@@ -1,3 +1,11 @@
+# intellij
 .idea
 .gradle
 build
+
+# eclipse
+.classpath
+.project
+.settings
+bin
+out

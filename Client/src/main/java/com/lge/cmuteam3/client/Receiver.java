@@ -85,7 +85,6 @@ public class Receiver extends Thread {
 		return queue.size();
 	}
 
-
 	// Utils Refactoring
 	private int readNBytes(InputStream inputStream, byte[] b, int off, int len) throws IOException {
         int n = 0;

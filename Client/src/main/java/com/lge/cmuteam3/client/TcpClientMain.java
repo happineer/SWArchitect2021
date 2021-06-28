@@ -1,5 +1,6 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.ui.BaseFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,20 +13,10 @@ public class TcpClientMain {
     public static void main(String[] args) {
         LOG.info("Client Application starts");
 
-        // Server ip and port could be moved into Receiver class, but I leave them here to consider later.
-        FileProperties prop = FileProperties.getInstance();
-        String serverIp = prop.getProperty("server.ip");
-        int serverPort = Integer.parseInt(prop.getProperty("server.port"));
-
-        JFrame frame = new JFrame("CMU 3");
-        JPanel panel = new JPanel();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(500, 500);
+        BaseFrame frame = new BaseFrame();
         frame.setVisible(true);
 
-        Receiver receiver = new Receiver(serverIp, serverPort);
-        Player player = new Player(receiver, panel, frame);
-        receiver.start();
-        player.start();
+        Player player = new Player(frame);
+        
     }
 }
