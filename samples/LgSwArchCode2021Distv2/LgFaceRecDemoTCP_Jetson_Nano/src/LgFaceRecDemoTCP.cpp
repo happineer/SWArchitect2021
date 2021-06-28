@@ -801,7 +801,7 @@ int camera_face_recognition(int argc, char *argv[])
 	fds[1].events = POLLIN;
 
     while(!user_quit) {
-		ret = poll(fds, 1, 5000);
+		ret = poll(fds, 2, 5000);
 		if (ret <= 0) {
 			DEBUG("[%s] ret = %d\n", __func__, ret);
 			continue;
