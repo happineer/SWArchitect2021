@@ -1,10 +1,15 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.BaseFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.image.BufferedImage;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.Socket;
 import java.util.Timer;
 import java.util.TimerTask;
 import javax.swing.*;
@@ -14,11 +19,6 @@ public class Player {
 
 	private final BaseFrame frame;
 	private JLabel video;
-	private JTextArea logArea;
-
-	// below fields will be loaded by client.properties file
-	private String serverIp;
-	private int serverTransferPort = 5000;
 	private int delay = 80;
 
 	private Receiver receiver;
@@ -44,43 +44,48 @@ public class Player {
 		}
 	}
 
-	public Player(BaseFrame frame) {
-		this.frame = frame;
-
+	public Player(Receiver receiver) {
+		this.frame = BaseFrame.getInstance();
 		FileProperties prop = FileProperties.getInstance();
-
-		this.serverIp = prop.getProperty("server.ip");
-		this.serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
 		this.delay = Integer.parseInt(prop.getProperty("client.delay"));
-
 		this.video = this.frame.getImageView();
 		this.video.setSize(1280, 720);
+		this.receiver = receiver;
 
-		this.frame.getButtonOK().addActionListener(e -> {
-			LOG.debug("Event:" + e.getActionCommand());
-
-			start();
-		});
-
-		this.frame.getDisconnectButton().addActionListener(e -> {
-			LOG.debug("Event:" + e.getActionCommand());
-			if (task != null) {
-				task.cancel();
-				task = null;
-				try {
-					receiver.join();
-				} catch (InterruptedException e1) {
-					e1.printStackTrace();
-				}
-				Player.this.receiver = null;
-				showLog("Disconnected!");
-			} else {
-				showLog("Not running!");
-				return;
-			}
-		});
-
-		this.logArea = frame.getLogArea();
+//		this.frame.getButtonOK().addActionListener(e -> {
+//			LOG.debug("Event:" + e.getActionCommand());
+//
+//			start();
+//		});
+//
+//		this.frame.getDisconnectButton().addActionListener(e -> {
+//			LOG.debug("Event:" + e.getActionCommand());
+////			if (task != null) {
+////				task.cancel();
+////				task = null;
+////				try {
+////					receiver.join();
+////				} catch (InterruptedException e1) {
+////					e1.printStackTrace();
+////				}
+////				Player.this.receiver = null;
+////				showLog("Disconnected!");
+////			} else {
+////				showLog("Not running!");
+////				return;
+////			}
+//			Socket socket = NetworkManager.getInstance().getNanoSocket();
+//			try {
+//				OutputStream outputStream = socket.getOutputStream();
+//				BufferedOutputStream bos = new BufferedOutputStream(outputStream);
+//				bos.write("1".getBytes());
+//				bos.write("2".getBytes());
+//				bos.flush();
+//			} catch (IOException e1) {
+//				// TODO Auto-generated catch block
+//				e1.printStackTrace();
+//			}
+//		});
 	}
 
 	public void start() {
@@ -94,7 +99,7 @@ public class Player {
 		}
 
 		showLog("Try to connect...");
-		receiver = new Receiver(serverIp, serverTransferPort);
+		receiver.start();
 
 		task = new Scheduler();
 		Timer timer = new Timer();
@@ -102,8 +107,7 @@ public class Player {
 	}
 
 	private void showLog(String message) {
-		logArea.append(message + "\n");
-		logArea.setCaretPosition(logArea.getDocument().getLength()); // �ǾƷ��� ��ũ���Ѵ�.
+		frame.appendLog(message);
 	}
 
 }

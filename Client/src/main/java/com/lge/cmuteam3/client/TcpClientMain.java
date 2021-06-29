@@ -1,6 +1,10 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.BaseFrame;
+
+import mode.ModeManager;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,10 +17,13 @@ public class TcpClientMain {
     public static void main(String[] args) {
         LOG.info("Client Application starts");
 
-        BaseFrame frame = new BaseFrame();
-        frame.setVisible(true);
-
-        Player player = new Player(frame);
+        if (!NetworkManager.getInstance().init()) {
+//        	System.exit(0);
+        }
+        BaseFrame frame = BaseFrame.getInstance();
+        frame.setModePanel();
         
+        
+        frame.setVisible(true);
     }
 }

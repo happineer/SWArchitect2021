@@ -3,6 +3,9 @@ package com.lge.cmuteam3.client;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
+import com.lge.cmuteam3.client.ui.BaseFrame;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.*;
@@ -16,6 +19,7 @@ import javax.imageio.ImageIO;
 public class Receiver extends Thread {
 	private static final Logger LOG = LoggerFactory.getLogger(Receiver.class);
 
+	BaseFrame frame;
 	String address;
 	int port;
 	int bufferSize;
@@ -23,7 +27,8 @@ public class Receiver extends Thread {
 	boolean imageReady = false;
 	Socket tcpSocket;
 
-	public Receiver(String address, int port){
+	public Receiver(String address, int port) {
+		this.frame = BaseFrame.getInstance();
 		this.address = address;
 		this.port = port;
 		String strBufferSize = FileProperties.get("client.bufferSize");
@@ -32,7 +37,7 @@ public class Receiver extends Thread {
 
 	private void receiveImages() {
 		try {
-			tcpSocket = new Socket(address, port);
+			tcpSocket = NetworkManager.getInstance().getNanoSocket();
 			InputStream inputStream = tcpSocket.getInputStream();
 			long init = System.currentTimeMillis();
 
@@ -42,11 +47,14 @@ public class Receiver extends Thread {
 				byte[] sizeAr = new byte[4];
 				readNBytes(inputStream, sizeAr, 0, 4);
 				int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
+				
+				// TODO: refactoring
+				doMonitor(size);
+				
 				byte[] imageAr = new byte[size];
 				readNBytes(inputStream, imageAr, 0, size);
 				queue.add(ImageIO.read(new ByteArrayInputStream(imageAr)));
 				long current = System.currentTimeMillis();
-				// System.out.println("gaenoo here : " + (current - init));
 				init = current;
 
 				count++;
@@ -83,6 +91,11 @@ public class Receiver extends Thread {
 
 	public int getRemainBufferSize() {
 		return queue.size();
+	}
+	
+	// receive과정에 문제 여부를 확인한다.
+	public void doMonitor(int size) {
+		frame.appendLog("received frame size : " + size);
 	}
 
 	// Utils Refactoring
