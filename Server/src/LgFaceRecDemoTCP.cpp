@@ -102,7 +102,7 @@ typedef struct {
     struct video_buffer buffer[MJPEG_OUT_BUF_NR];
     imageFormat inputFormat;
     size_t      inputImageSize;
-
+    int         filesize;
 } TMotionJpegFileDesc;
 
 struct task_info {
@@ -229,6 +229,11 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
 
         return false;
     }
+
+  // get length of file:
+    FileDesc->mpegfile.seekg (0, FileDesc->mpegfile.end);
+    FileDesc->filesize = FileDesc->mpegfile.tellg();
+    FileDesc->mpegfile.seekg (0, FileDesc->mpegfile.beg);
 
     FileDesc->mpegfile.read((char*)&FileDesc->width, sizeof(FileDesc->width));
     if (FileDesc->mpegfile.gcount() != sizeof(FileDesc->width)) 
@@ -370,6 +375,11 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 	vp->frame_number = FrameCount;
     FrameCount++;
     printf("FrameCount %d\n",FrameCount);
+
+	if (FileDesc->mpegfile.tellg() >= (FileDesc->filesize - 4)) {
+		printf("[%s] FILE EOF, rewinding...\n", __func__);
+		FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
+	}
 
     return true;
 
