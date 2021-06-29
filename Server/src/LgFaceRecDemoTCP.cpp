@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include <sys/epoll.h>
 #include <sys/timerfd.h>
 
 #include "mtcnn.h"
@@ -665,11 +666,28 @@ static struct task_info g_task_info[TID_NR] = {
 	{ TID_SENDER,          video_task_face_detect, do_send_video, }
 };
 
+
+void start_video_stream(TTcpConnectedPort *tcpConnectedPort)
+{
+	static bool once;
+	struct video_buffer *buffer;
+
+	if (once)
+		return;
+	
+	buffer = (struct video_buffer *)malloc(sizeof(struct video_buffer));
+	memset(buffer, 0, sizeof(buffer));
+	buffer->TcpConnectedPort = tcpConnectedPort;
+	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
+	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
+	once = true;
+}
+
 // perform face recognition with Raspberry Pi camera
 int camera_face_recognition(int argc, char *argv[])
 {
     TTcpListenPort    *TcpListenPort;
-    TTcpConnectedPort *TcpConnectedPort;
+    TTcpConnectedPort *TcpConnectedPort = NULL;
     struct sockaddr_in cli_addr;
     socklen_t          clilen;
     short              listen_port;
@@ -765,51 +783,69 @@ int camera_face_recognition(int argc, char *argv[])
 
     clilen = sizeof(cli_addr);
 
-    printf("Listening for connections\n");
-
-    if  ((TcpConnectedPort=AcceptTcpConnection(TcpListenPort,&cli_addr,&clilen))==NULL)
-    {  
-        printf("AcceptTcpConnection Failed\n");
-        return(-1); 
-    }
-
-    printf("Accepted connection Request\n");
-
-	struct video_buffer *buffer;
-	buffer = (struct video_buffer *)malloc(sizeof(struct video_buffer));
-	memset(buffer, 0, sizeof(buffer));
-	buffer->TcpConnectedPort = TcpConnectedPort;
-	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
-	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
-	
-	struct pollfd fds[2];
+#define MAX_EVENTS		10
+	struct epoll_event ev, events[MAX_EVENTS];
+	int epollfd;
 	int timerfd;
-	int ret;
+
+	epollfd = epoll_create1(0);
+	if (epollfd == -1) {
+		perror("epoll_create1");
+		exit(EXIT_FAILURE);
+	}
+
+	ev.events = EPOLLIN;
+	ev.data.fd = TcpListenPort->ListenFd;
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
+		perror("epoll_ctl: TcpListenPort");
+		exit(EXIT_FAILURE);
+	}
 	
 	timerfd = timerfd_open(1, 1);
-	
-	memset(fds, 0, sizeof(fds));
-	fds[0].fd = timerfd;
-	fds[0].events = POLLIN;
+	ev.events = EPOLLIN;
+	ev.data.fd = timerfd;
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
+		perror("epoll_ctl: timerfd");
+		exit(EXIT_FAILURE);
+	}
 
-	fds[1].fd = TcpConnectedPort->ConnectedFd;
-	fds[1].events = POLLIN;
+	printf("Listening for connections\n");
 
     while(!user_quit) {
-		ret = poll(fds, 2, 5000);
-		if (ret <= 0) {
-			DEBUG("[%s] ret = %d\n", __func__, ret);
-			continue;
-		}
-
-		if (fds[0].revents & POLLIN) {
-			handle_timer(fds[0].fd);
-		}
-
-		if (fds[1].revents & POLLIN) {
-			handle_client_msg(TcpConnectedPort);
+		int n;
+		int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+		if (nfds == -1) {
+			perror("epoll_wait");
+			exit(EXIT_FAILURE);
 		}
 		
+		for (n = 0; n < nfds; ++n) {
+			if (events[n].data.fd == TcpListenPort->ListenFd) {
+				TTcpConnectedPort *connectedPort = AcceptTcpConnection(TcpListenPort,&cli_addr,&clilen);
+				if (connectedPort == NULL) {  
+					printf("AcceptTcpConnection Failed\n");
+					continue;
+				}
+				if (TcpConnectedPort) {
+					printf("Already connected, disconnecting..\n");
+					CloseTcpConnectedPort(&connectedPort);
+					continue;
+				}
+				TcpConnectedPort = connectedPort;
+				printf("Accepted connection Request\n");
+				ev.data.fd = TcpConnectedPort->ConnectedFd;
+				if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
+					perror("epoll_ctl: conn_sock");
+					exit(EXIT_FAILURE);
+				}
+				start_video_stream(TcpConnectedPort);
+			} else if (events[n].data.fd == timerfd) {
+				handle_timer(timerfd);
+			} else { // timerfd
+				handle_client_msg(TcpConnectedPort);
+				//start_video_stream(TcpConnectedPort);
+			}
+		}
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
 
