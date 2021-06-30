@@ -1,8 +1,11 @@
 package mode;
 
-import com.lge.cmuteam3.client.ui.BaseFrame;
+import com.lge.cmuteam3.client.ui.UiController;
 
-public class TestAccuracyMode implements Mode {
+public class TestAccuracyMode extends BaseMode {
+	TestAccuracyMode(UiController uiController) {
+		super(uiController);
+	}
 
 	@Override
 	public String getModeName() {
@@ -11,13 +14,13 @@ public class TestAccuracyMode implements Mode {
 	
 	@Override
 	public void start() {
-		BaseFrame.getInstance().appendLog("Test Accuracy Mode start");
+		appendUiLog("Test Accuracy Mode start");
 		
 	}
 
 	@Override
 	public void stop() {
-		BaseFrame.getInstance().appendLog("Test Accuracy Mode stop");
+		appendUiLog("Test Accuracy Mode stop");
 		
 	}
 

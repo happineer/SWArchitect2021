@@ -1,10 +1,12 @@
 package com.lge.cmuteam3.client.network;
 
-import java.io.IOException;
 import java.net.Socket;
 import com.lge.cmuteam3.client.FileProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class NetworkManager {
+	private static final Logger LOG = LoggerFactory.getLogger(NetworkManager.class);
 
 	Socket nanoSocket;
 	Socket controllerSocket;
@@ -12,37 +14,35 @@ public class NetworkManager {
 	private static NetworkManager instance = new NetworkManager();
 	private NetworkManager() {}
 	public static NetworkManager getInstance() {
+		if (instance == null) {
+			instance = new NetworkManager();
+		}
 		return instance;
 	}
-	
-	// 초기화 추가 변경 필요
-	public boolean init() {
+
+	public Socket getNanoSocket() {
+		if (nanoSocket != null) {
+			LOG.info("Nano socket is busy");
+			return null;
+		}
+
 		FileProperties prop = FileProperties.getInstance();
 		String serverIp = prop.getProperty("server.ip");
 		int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
 		int controlPort = Integer.parseInt(prop.getProperty("server.control.port"));
-		
-		
+
 		try {
+			LOG.info("ip:" + serverIp + " port:" + serverTransferPort);
 			nanoSocket = new Socket(serverIp, serverTransferPort);
-//			controllerSocket = new Socket(serverIp, controlPort);
-			return true;
+			return nanoSocket;
 		} catch (Exception e) {
-			e.printStackTrace();
-			instance = null;
-			return false;
+			LOG.info("Connection failed!!!!"+e.getMessage());
+			nanoSocket = null;
+			return null;
 		}
-		
-		
 	}
 	
 	public void controlNano() {
 		
 	}
-	
-	
-	public Socket getNanoSocket() {
-		return nanoSocket;
-	}
-	
 }

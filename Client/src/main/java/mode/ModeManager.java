@@ -1,40 +1,37 @@
 package mode;
 
+import com.lge.cmuteam3.client.ui.OnUiEventListener;
+import com.lge.cmuteam3.client.ui.UiController;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class ModeManager {
+public class ModeManager implements OnUiEventListener {
 
 	private static ModeManager instance;
 	private ArrayList<Mode> modeList = new ArrayList<>();
 	private Mode currentMode;
 	
 	private ModeManager() {
-		modeList.add(new TestRunMode());
-		modeList.add(new RunMode());
-		modeList.add(new TestAccuracyMode());
 		currentMode = null;
 	}
-	
+
 	public static ModeManager getInstance() {
 		if (instance == null) {
 			instance = new ModeManager();
 		}
 		return instance;
 	}
-	
-	public void startMode(Mode mode) {
-		currentMode = mode;
-		mode.start();
+
+	public void init(UiController uiController) {
+		modeList = new ArrayList<>();
+		modeList.add(new TestRunMode(uiController));
+		modeList.add(new RunMode(uiController));
+		modeList.add(new TestAccuracyMode(uiController));
+
+		uiController.setModePanel(modeList, this);
 	}
-	
-	public void stopMode() {
-		if (currentMode != null) {
-			currentMode.stop();
-		}
-		currentMode = null;
-	}
-	
+
 	public Mode getCurrentMode(Mode mode) {
 		return currentMode;
 	}
@@ -42,5 +39,18 @@ public class ModeManager {
 	public List<Mode> getModeList() {
 		return modeList;
 	}
-	
+
+	@Override
+	public void onUiStart(Mode mode) {
+		currentMode = mode;
+		mode.start();
+	}
+
+	@Override
+	public void onUiStop(Mode mode) {
+		if (currentMode != null) {
+			currentMode.stop();
+		}
+		currentMode = null;
+	}
 }

@@ -1,28 +1,28 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.ui.UiController;
+
+import java.net.Socket;
+
 public class PlaybackManager {
 
 	private Player player;
 	private Receiver receiver;
-	private static PlaybackManager instance;
-	
-	private PlaybackManager() {
-		FileProperties prop = FileProperties.getInstance();
-		String serverIp = prop.getProperty("server.ip");
-		int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
-		receiver = new Receiver(serverIp, serverTransferPort);
-		player = new Player(receiver);
+	private UiController uiController;
+
+	public PlaybackManager(UiController uiController) {
+		this.uiController = uiController;
 	}
 	
-	public static PlaybackManager getInstance() {
-		if (instance == null) {
-			instance = new PlaybackManager();
+	public void play(Socket socket) {
+		receiver = new Receiver(socket);
+		player = new Player(receiver, uiController);
+		player.start(socket);
+	}
+
+	public void stop() {
+		if (player != null) {
+			player.stop();
 		}
-		return instance;
-	}
-	
-	
-	public void play() {
-		player.start();
 	}
 }
