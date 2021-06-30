@@ -77,8 +77,24 @@ static int buffer_count = MJPEG_OUT_BUF_NR;
 
 #define	TIME_STAMP_NR			20
 
+struct __attribute__((packed)) cmd_msg {
+	__u32 type;
+	__u32 value;
+};
+
+enum CMD_TYPE {
+	CMD_TYPE_NORMAL	 	= 0x1,
+};
+
+enum CMD_VALUE {
+	CMD_RUN_MODE 		= 0x1,
+	CMD_TEST_RUN_MODE	= 0x2,
+	CMD_TEST_ACC		= 0x3,
+};
+
 struct video_buffer {
 	void *output;
+	struct cmd_msg msg;
 	cv::Mat *origin_cpu;
 	cv::cuda::GpuMat *imgRGB_gpu;
 	uchar* rgb_gpu;
@@ -122,11 +138,6 @@ struct task_info {
     std::vector<std::string> *labels;
 };
 
-struct __attribute__((packed)) cmd_msg {
-	__u32 type;
-	__u32 value;
-};
-
 
 static gstCamera* g_camera = NULL;
 static TMotionJpegFileDesc MotionJpegFd;
@@ -137,6 +148,9 @@ static int video_fps;
 static int video_frames;
 
 static int ring_index;
+
+static TTcpConnectedPort *gTcpConnectedPort;
+
 
 struct ipc {
 	int sock[2];
@@ -273,6 +287,16 @@ static bool video_buffer_alloc(struct video_buffer *vbs, size_t imgSize)
 /***********************************************************************************************/
 /***********************************************************************************************/
 /***********************************************************************************************/
+static bool RewindMotionJpegFile(TMotionJpegFileDesc *FileDesc)
+{
+    if (!FileDesc)
+		return false;
+
+    FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
+
+    return true;
+}
+
 
 static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, int *Width, int *Height)
 {
@@ -409,7 +433,7 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 
 	if (FileDesc->mpegfile.tellg() >= (FileDesc->filesize - 4)) {
 		printf("[%s] FILE EOF, rewinding...\n", __func__);
-		FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
+		RewindMotionJpegFile(FileDesc);
 	}
 
 	video_buffer_mark_time(vp);
@@ -502,14 +526,73 @@ static void comm_socket_init(int *sock)
 	}
 }
 
+
+static void do_send_cmd_msg(struct video_buffer *buffer)
+{
+	int ret;
+	ret = write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
+	printf("[%s] fd: %d, ret = %d\n", __func__, ipcs[TID_SENDER].sock[IPC_SEND], ret);
+}
+
+static void send_cmd_msg(struct cmd_msg *msg)
+{
+	struct video_buffer *buffer;
+
+	buffer = (struct video_buffer *)malloc(sizeof(struct video_buffer));
+	memset(buffer, 0, sizeof(struct video_buffer));
+	memcpy(&buffer->msg, msg, sizeof(struct cmd_msg));
+
+	printf("[%s] cmd_msg: 0x%08X 0x%08X\n", __func__, buffer->msg.type, buffer->msg.value);	
+	do_send_cmd_msg(buffer);
+}
+
+static void recv_cmd_msg(struct video_buffer *buffer, struct cmd_msg *msg)
+{
+	memcpy(msg, &buffer->msg, sizeof(struct cmd_msg));
+
+	printf("[%s] cmd_msg: 0x%08X 0x%08X\n", __func__, msg->type, msg->value);	
+	
+	free(buffer);
+}
+
+
+static void handle_cmd_msg(struct cmd_msg *msg)
+{
+	if (msg->type != 1) {
+		assert(msg->type == 1);
+		return;
+	}
+
+	switch (msg->value)
+	{
+	case CMD_RUN_MODE:
+		break;
+
+	case CMD_TEST_RUN_MODE:
+		printf("[%s]: CMD_TEST_RUN_MODE\n", __func__);
+		RewindMotionJpegFile(&MotionJpegFd);
+		break;
+
+	case CMD_TEST_ACC:
+		break;
+
+	default:
+		break;
+	}
+}
+
+
 void do_capture(struct task_info *task, struct video_buffer *buffer)
 {
 	static TTcpConnectedPort *TcpConnectedPort = NULL;
 	float* imgOrigin = NULL;	// camera image 
 
 	if (buffer->output == NULL) {
-		printf("[%s]: start .....\n", __func__);
-		TcpConnectedPort = buffer->TcpConnectedPort;
+		printf("[%s]: recv cmd\n", __func__);
+		TcpConnectedPort = gTcpConnectedPort;
+		struct cmd_msg msg;
+		recv_cmd_msg(buffer, &msg);
+		handle_cmd_msg(&msg);
 	}
 	else {
 		compute_duration(buffer);
@@ -714,6 +797,7 @@ static void handle_client_msg(TTcpConnectedPort *tcpConnectedPort)
 	assert(ret == sizeof(msg));
 
 	printf("[%s] client msg type : 0x%08X, value : 0x%08X\n", __func__, msg.type, msg.value);
+	send_cmd_msg(&msg);
 }
 
 static struct task_info g_task_info[TID_NR] = {
@@ -726,19 +810,23 @@ static struct task_info g_task_info[TID_NR] = {
 };
 
 
+
 void start_video_stream(TTcpConnectedPort *tcpConnectedPort)
 {
 	static bool once;
-	struct video_buffer *buffer;
+	int ret;
 
 	if (once)
 		return;
 	
-	buffer = (struct video_buffer *)malloc(sizeof(struct video_buffer));
-	memset(buffer, 0, sizeof(buffer));
-	buffer->TcpConnectedPort = tcpConnectedPort;
-	write(ipcs[TID_SENDER].sock[IPC_SEND], &buffer, sizeof(buffer));
-	printf("Triger reading fd: %d\n", ipcs[TID_SENDER].sock[IPC_SEND]);
+	gTcpConnectedPort = tcpConnectedPort;
+	
+	struct cmd_msg msg;
+	msg.type = CMD_TYPE_NORMAL;
+	msg.value = CMD_TEST_RUN_MODE;
+	
+	send_cmd_msg(&msg);
+	printf("[%s] Triger reading\n", __func__);
 	once = true;
 }
 
