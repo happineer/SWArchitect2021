@@ -130,6 +130,7 @@ static int imgHeight;
 static int video_fps;
 static int video_frames;
 
+static int ring_index;
 
 struct ipc {
 	int sock[2];
@@ -213,6 +214,46 @@ int timerfd_open(int init_sec, int period_sec)
 	return fd;
 }
 
+void video_buffer_init(struct video_buffer *buffer)
+{
+	buffer->num_dets = 0;
+	buffer->rects->clear();
+	buffer->keypoints->clear();
+	buffer->faces->clear();
+	buffer->face_embeddings->clear();
+	buffer->face_labels->clear();
+}
+
+static bool video_buffer_alloc(struct video_buffer *vbs, size_t imgSize)
+{
+	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
+		struct video_buffer *vp = &vbs[i];
+	    if( !cudaAllocMapped(&vp->output, imgSize) )
+    	{
+        	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
+	        return false;
+    	}
+
+        vp->origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, vp->output);
+
+	    cudaAllocMapped( (void**) &vp->rgb_cpu, (void**) &vp->rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
+	    cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[0], (void**) &vp->cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
+    	cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[1], (void**) &vp->cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
+  
+        // create GpuMat form the same image thanks to shared memory
+        vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
+
+		vp->detections = new std::vector<struct Bbox>(10);
+
+		vp->num_dets = 0;
+		vp->rects = new std::vector<cv::Rect>(10);
+		vp->keypoints = new std::vector<float*>(10);
+		vp->faces = new std::vector<matrix<rgb_pixel>>(10);
+		vp->face_embeddings = new std::vector<matrix<float,0,1>>(10);
+		vp->face_labels = new std::vector<double>(10);
+	}
+	return true;
+}
 
 
 /***********************************************************************************************/
@@ -271,32 +312,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         return false;
     }
 
-	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
-		struct video_buffer *vp = &FileDesc->buffer[i];
-	    if( !cudaAllocMapped(&vp->output, imgSize) )
-    	{
-        	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
-	        return false;
-    	}
-
-        vp->origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, vp->output);
-
-	    cudaAllocMapped( (void**) &vp->rgb_cpu, (void**) &vp->rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
-	    cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[0], (void**) &vp->cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
-    	cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[1], (void**) &vp->cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
-  
-        // create GpuMat form the same image thanks to shared memory
-        vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
-
-		vp->detections = new std::vector<struct Bbox>(10);
-
-		vp->num_dets = 0;
-		vp->rects = new std::vector<cv::Rect>(10);
-		vp->keypoints = new std::vector<float*>(10);
-		vp->faces = new std::vector<matrix<rgb_pixel>>(10);
-		vp->face_embeddings = new std::vector<matrix<float,0,1>>(10);
-		vp->face_labels = new std::vector<double>(10);
-	}
+	video_buffer_alloc(FileDesc->buffer, imgSize);
 
     printf("Open width %d height %d\n",*Width,*Height);
     return true;
@@ -325,7 +341,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 {
     unsigned int imagesize;
     unsigned char* buff;
-	static unsigned int out_idx;
 
     // validate parameters
     if( !FileDesc)
@@ -358,7 +373,7 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 
     memcpy(FileDesc->inputImgGPU, img.data, imageFormatSize(FileDesc->inputFormat, FileDesc->width, FileDesc->height));
 
-	struct video_buffer *vp = &FileDesc->buffer[out_idx];
+	struct video_buffer *vp = &FileDesc->buffer[ring_index];
 
     if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, vp->output, IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
     {
@@ -370,7 +385,7 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 	cudaRGBA32ToRGB8((float4*)vp->output, (uchar3*)vp->rgb_gpu, imgWidth, imgHeight);  
     *output = vp;
     
-	out_idx = (out_idx + 1) % MJPEG_OUT_BUF_NR;
+	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
 
 	vp->frame_number = FrameCount;
     FrameCount++;
