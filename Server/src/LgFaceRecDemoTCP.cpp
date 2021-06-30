@@ -74,6 +74,8 @@ unsigned int FrameCount=0;
 
 static int buffer_count = MJPEG_OUT_BUF_NR;
 
+#define	TIME_STAMP_NR			20
+
 struct video_buffer {
 	void *output;
 	cv::Mat *origin_cpu;
@@ -92,6 +94,9 @@ struct video_buffer {
     std::vector<matrix<float,0,1>> *face_embeddings;
     std::vector<double> *face_labels;
 	unsigned int frame_number;
+
+	int ntimes;
+	struct timespec times[TIME_STAMP_NR];
 };
 
 typedef struct {
@@ -130,6 +135,7 @@ static int imgHeight;
 static int video_fps;
 static int video_frames;
 
+static int ring_index;
 
 struct ipc {
 	int sock[2];
@@ -214,6 +220,54 @@ int timerfd_open(int init_sec, int period_sec)
 }
 
 
+static inline void video_buffer_init(struct video_buffer *buffer)
+{
+	buffer->ntimes = 0;
+	buffer->num_dets = 0;
+	buffer->rects->clear();
+	buffer->keypoints->clear();
+	buffer->faces->clear();
+	buffer->face_embeddings->clear();
+	buffer->face_labels->clear();
+}
+
+static inline void video_buffer_mark_time(struct video_buffer *buffer)
+{
+	clock_gettime(CLOCK_MONOTONIC, &buffer->times[buffer->ntimes]);
+	buffer->ntimes++;
+}
+
+static bool video_buffer_alloc(struct video_buffer *vbs, size_t imgSize)
+{
+	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
+		struct video_buffer *vp = &vbs[i];
+	    if( !cudaAllocMapped(&vp->output, imgSize) )
+    	{
+        	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
+	        return false;
+    	}
+
+        vp->origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, vp->output);
+
+	    cudaAllocMapped( (void**) &vp->rgb_cpu, (void**) &vp->rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
+	    cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[0], (void**) &vp->cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
+    	cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[1], (void**) &vp->cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
+  
+        // create GpuMat form the same image thanks to shared memory
+        vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
+
+		vp->detections = new std::vector<struct Bbox>(10);
+
+		vp->num_dets = 0;
+		vp->rects = new std::vector<cv::Rect>(10);
+		vp->keypoints = new std::vector<float*>(10);
+		vp->faces = new std::vector<matrix<rgb_pixel>>(10);
+		vp->face_embeddings = new std::vector<matrix<float,0,1>>(10);
+		vp->face_labels = new std::vector<double>(10);
+	}
+	return true;
+}
+
 
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -271,32 +325,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         return false;
     }
 
-	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
-		struct video_buffer *vp = &FileDesc->buffer[i];
-	    if( !cudaAllocMapped(&vp->output, imgSize) )
-    	{
-        	LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image \n", imgSize);
-	        return false;
-    	}
-
-        vp->origin_cpu = new cv::Mat(imgHeight, imgWidth, CV_32FC4, vp->output);
-
-	    cudaAllocMapped( (void**) &vp->rgb_cpu, (void**) &vp->rgb_gpu, imgWidth*imgHeight*3*sizeof(uchar) );
-	    cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[0], (void**) &vp->cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
-    	cudaAllocMapped( (void**) &vp->cropped_buffer_cpu[1], (void**) &vp->cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
-  
-        // create GpuMat form the same image thanks to shared memory
-        vp->imgRGB_gpu = new cv::cuda::GpuMat(imgHeight, imgWidth, CV_8UC3, vp->rgb_gpu);
-
-		vp->detections = new std::vector<struct Bbox>(10);
-
-		vp->num_dets = 0;
-		vp->rects = new std::vector<cv::Rect>(10);
-		vp->keypoints = new std::vector<float*>(10);
-		vp->faces = new std::vector<matrix<rgb_pixel>>(10);
-		vp->face_embeddings = new std::vector<matrix<float,0,1>>(10);
-		vp->face_labels = new std::vector<double>(10);
-	}
+	video_buffer_alloc(FileDesc->buffer, imgSize);
 
     printf("Open width %d height %d\n",*Width,*Height);
     return true;
@@ -325,7 +354,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 {
     unsigned int imagesize;
     unsigned char* buff;
-	static unsigned int out_idx;
 
     // validate parameters
     if( !FileDesc)
@@ -334,6 +362,10 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
         return false;
     }
 
+	struct video_buffer *vp = &FileDesc->buffer[ring_index];
+
+	video_buffer_init(vp);
+	video_buffer_mark_time(vp);
     FileDesc->mpegfile.read((char*)&imagesize, sizeof(imagesize));
     if (FileDesc->mpegfile.gcount() != sizeof(imagesize)) return(0);
     imagesize = ntohl(imagesize);
@@ -358,8 +390,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 
     memcpy(FileDesc->inputImgGPU, img.data, imageFormatSize(FileDesc->inputFormat, FileDesc->width, FileDesc->height));
 
-	struct video_buffer *vp = &FileDesc->buffer[out_idx];
-
     if( CUDA_FAILED(cudaConvertColor(FileDesc->inputImgGPU, FileDesc->inputFormat, vp->output, IMAGE_RGBA32F, FileDesc->width, FileDesc->height)) )
     {
         printf("LOG_IMAGE loadImage() -- failed to convert image \n");
@@ -370,16 +400,18 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 	cudaRGBA32ToRGB8((float4*)vp->output, (uchar3*)vp->rgb_gpu, imgWidth, imgHeight);  
     *output = vp;
     
-	out_idx = (out_idx + 1) % MJPEG_OUT_BUF_NR;
+	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
 
-	vp->frame_number = FrameCount;
     FrameCount++;
+	vp->frame_number = FrameCount;
     printf("FrameCount %d\n",FrameCount);
 
 	if (FileDesc->mpegfile.tellg() >= (FileDesc->filesize - 4)) {
 		printf("[%s] FILE EOF, rewinding...\n", __func__);
 		FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
 	}
+
+	video_buffer_mark_time(vp);
 
     return true;
 
@@ -424,6 +456,24 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	printf("%s\n", buf);
 }
 
+void compute_duration(struct video_buffer *buffer)
+{
+	int i;
+	int n = 0;
+	int diff;
+	char buf[256];
+
+	n += sprintf(buf, "DURATION %d %d %d %d", buffer->ntimes, buffer->frame_number, video_fps, buffer->num_dets);
+	for (i = 0; i < buffer->ntimes - 1; i++) {
+		diff = (buffer->times[i + 1].tv_sec - buffer->times[i].tv_sec) * 1000000000ULL;
+		diff += buffer->times[i + 1].tv_nsec - buffer->times[i].tv_nsec;
+		diff /= 1000000;
+		n += sprintf(buf + n, " %d", diff);
+	}
+	printf("%s\n", buf);
+}
+
+
 static void comm_socket_init(int *sock)
 {
 	int s[2];
@@ -459,6 +509,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 		TcpConnectedPort = buffer->TcpConnectedPort;
 	}
 	else {
+		compute_duration(buffer);
 		buffer_count++;
 	}
 
@@ -556,8 +607,10 @@ void *video_task_face_detect(void *args)
 		nread = read(fds[0].fd, &buffer, sizeof(buffer));
 		assert(nread == sizeof(buffer));
 
+		video_buffer_mark_time(buffer);
 		if (task->do_work)
 			task->do_work(task, buffer);
+		video_buffer_mark_time(buffer);
 		
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 		DEBUG("[%s] TID: %d, write next ipc fd = %d, buffer: %p\n", __func__, tid, ipcs[tid].sock[IPC_SEND], buffer);
@@ -567,13 +620,6 @@ void *video_task_face_detect(void *args)
 
 void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 {
-	buffer->num_dets = 0;
-	buffer->rects->clear();
-	buffer->keypoints->clear();
-	buffer->faces->clear();
-	buffer->face_embeddings->clear();
-	buffer->face_labels->clear();
-
     buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
 	DEBUG("[%s]: Frame # : %d FACE # : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 	if (buffer->num_dets <= 0) {
