@@ -1,10 +1,14 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.BaseFrame;
+
+import com.lge.cmuteam3.client.ui.UiController;
+import mode.ModeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.swing.*;
+import java.awt.EventQueue;
 
 public class TcpClientMain {
     // Slf4j + logback applied.
@@ -13,10 +17,13 @@ public class TcpClientMain {
     public static void main(String[] args) {
         LOG.info("Client Application starts");
 
-        BaseFrame frame = new BaseFrame();
-        frame.setVisible(true);
+        EventQueue.invokeLater(() -> {
+            BaseFrame frame = new BaseFrame();
+            frame.setVisible(true);
 
-        Player player = new Player(frame);
-        
+            UiController uiController = new UiController(frame);
+            ModeManager modeManager = ModeManager.getInstance();
+            modeManager.init(uiController);
+        });
     }
 }

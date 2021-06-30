@@ -5,43 +5,48 @@ import javax.swing.border.EmptyBorder;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 
 public class BaseFrame extends JFrame {
 	private static final long serialVersionUID = -2860632918949315691L;
 
 	private JPanel contentPane;
 	private JLabel imageView;
-	private JButton connectButton;
-	private JButton disconnectButton;
 	private JTextArea logArea;
-	private JLabel lblNewLabel;
 	private JScrollPane scrollPane;
 
 	private JLabel labelServer;
 	private JTextField serverAddressTextField;
 
+	private StatisticsPanel statisticsPanel;
+	private JPanel bottomPanel;
+	private JPanel jitterPanel;
+	private JLabel jitterLabel;
+
+	public JPanel getTopPanel() {
+		return topPanel;
+	}
+
+	private final JPanel topPanel;
+
 	public JLabel getImageView() {
 		return imageView;
-	}
-
-	public JButton getButtonOK() {
-		return connectButton;
-	}
-
-	public JButton getDisconnectButton() {
-		return disconnectButton;
 	}
 
 	public JTextArea getLogArea() {
 		return logArea;
 	}
-	
+
 	public JTextField getServerAddressTextField() {
 		return serverAddressTextField;
 	}
 
+	public StatisticsPanel getStatisticsPanel() {
+		return statisticsPanel;
+	}
+
 	public BaseFrame() {
-		setTitle("CMU Team 3");
+		setTitle("CMU LG SW Architect Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		setBounds(100, 100, 750, 900);
 		contentPane = new JPanel();
@@ -50,36 +55,42 @@ public class BaseFrame extends JFrame {
 		setContentPane(contentPane);
 
 		imageView = new JLabel("");
+		imageView.setSize(1280, 720);
 		contentPane.add(imageView, BorderLayout.CENTER);
 
-		JPanel panel = new JPanel();
-		contentPane.add(panel, BorderLayout.NORTH);
-		
+
+		topPanel = new JPanel();
+		contentPane.add(topPanel, BorderLayout.NORTH);
+
 		labelServer = new JLabel("Target Server");
-		panel.add(labelServer);
-		
+		topPanel.add(labelServer);
+
 		serverAddressTextField = new JTextField();
-		panel.add(serverAddressTextField);
+		topPanel.add(serverAddressTextField);
 		serverAddressTextField.setColumns(12);
 		serverAddressTextField.setEditable(false);
 
-		lblNewLabel = new JLabel("Run Mode");
-		panel.add(lblNewLabel);
-
-		connectButton = new JButton("Connect");
-		panel.add(connectButton);
-
-		disconnectButton = new JButton("Disconnect");
-		panel.add(disconnectButton);
-
 		logArea = new JTextArea();
-		logArea.setRows(6);
+		logArea.setRows(10);
 		logArea.setEditable(false);
 
-		getRootPane().setDefaultButton(connectButton);
+
+		bottomPanel = new JPanel();
+		contentPane.add(bottomPanel, BorderLayout.SOUTH);
+		bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.X_AXIS));
 
 		scrollPane = new JScrollPane(logArea);
-		contentPane.add(scrollPane, BorderLayout.SOUTH);
+		bottomPanel.add(scrollPane, BorderLayout.SOUTH);
+
+		jitterPanel = new JPanel();
+		bottomPanel.add(jitterPanel);
+
+		jitterLabel = new JLabel("Jitter Histogram");
+		jitterLabel.setHorizontalAlignment(SwingConstants.LEFT);
+		jitterPanel.add(jitterLabel);
+
+		statisticsPanel = new StatisticsPanel();
+		contentPane.add(statisticsPanel, BorderLayout.WEST);
 
 		// call onCancel() when cross is clicked
 		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -96,9 +107,27 @@ public class BaseFrame extends JFrame {
 			}
 		}, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
 	}
-
+	
 	private void onCancel() {
 		// add your code here if necessary
 		dispose();
+	}
+
+	void updateImage(BufferedImage image) {
+		imageView.setIcon(new ImageIcon(image));
+		pack();
+	}
+
+	void cleanImage() {
+		imageView.setIcon(null);
+	}
+
+	void appendLog(String currentTime, String message) {
+		logArea.append(String.format("[%s] %s\n", currentTime, message));
+		logArea.setCaretPosition(logArea.getDocument().getLength());
+	}
+
+	void clearLog() {
+		logArea.replaceRange("", 0, logArea.getDocument().getLength());
 	}
 }
