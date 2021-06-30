@@ -102,7 +102,6 @@ struct video_buffer {
     uchar* cropped_buffer_gpu[2];
     uchar* cropped_buffer_cpu[2];
 	std::vector<struct Bbox> *detections;
-	TTcpConnectedPort TcpConnectedPort;
 
 	int num_dets;
 	std::vector<cv::Rect> *rects;
@@ -597,6 +596,9 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 		buffer_count++;
 	}
 
+	if (gTcpConnectedPort == -1)
+		return;
+
 	if (usecamera)
     {
         if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))
@@ -609,7 +611,6 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 				printf("Load Failed JPEG.. Maybe EOF\n");
 				assert(0);
 			}
-			buffer->TcpConnectedPort = gTcpConnectedPort;
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 			buffer_count--;
 			DEBUG("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
@@ -753,6 +754,15 @@ void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
     do_face_predict(task, buffer);
 }
 
+static void diconnect_client(void)
+{
+	printf("[%s] client connection error : %d : %s \n", __func__, errno, strerror(errno));
+	CloseTcpConnectedPort(gTcpConnectedPort);
+	gTcpConnectedPort = -1;
+	return;
+}
+
+
 static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 {
 	int nread;
@@ -763,9 +773,14 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
-		
+
+	if (gTcpConnectedPort == -1)
+		return;
+
 	//Render captured image
-	if (TcpSendImageAsJpeg(buffer->TcpConnectedPort, buffer->origin_cpu) < 0) {
+	if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu) < 0) {
+		diconnect_client();
+		return;
 		assert(0);
 	}
 	video_frames++;
@@ -786,12 +801,21 @@ static void handle_timer(int fd)
 	printf("[%s] video fps = %d\n", __func__, video_fps);
 }
 
-static void handle_client_msg(TTcpConnectedPort tcpConnectedPort)
+static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 {
 	struct cmd_msg msg;
 	int ret;
 
 	ret = ReadDataTcp(tcpConnectedPort, (unsigned char *)&msg, sizeof(msg));
+	if (ret != sizeof(msg)) {
+		if (epoll_ctl(epollfd, EPOLL_CTL_DEL, tcpConnectedPort, NULL) == -1) {
+			perror("epoll_ctl: EPOLL_CTL_DEL conn_sock");
+			exit(EXIT_FAILURE);
+		}
+		printf("[%s] epoll_ctl: EPOLL_CTL_DEL conn_sock\n", __func__);
+		diconnect_client();
+		return;
+	}
 	assert(ret == sizeof(msg));
 
 	printf("[%s] client msg type : 0x%08X, value : 0x%08X\n", __func__, msg.type, msg.value);
@@ -811,19 +835,14 @@ static struct task_info g_task_info[TID_NR] = {
 
 void start_video_stream(TTcpConnectedPort tcpConnectedPort)
 {
-	static bool once;
 	int ret;
 
-	if (once)
-		return;
-	
 	struct cmd_msg msg;
 	msg.type = CMD_TYPE_NORMAL;
 	msg.value = CMD_TEST_RUN_MODE;
 	
 	send_cmd_msg(&msg);
 	printf("[%s] Triger reading\n", __func__);
-	once = true;
 }
 
 // perform face recognition with Raspberry Pi camera
@@ -983,9 +1002,8 @@ int camera_face_recognition(int argc, char *argv[])
 				start_video_stream(gTcpConnectedPort);
 			} else if (events[n].data.fd == timerfd) {
 				handle_timer(timerfd);
-			} else { // timerfd
-				handle_client_msg(gTcpConnectedPort);
-				//start_video_stream(gTcpConnectedPort);
+			} else { // from client
+				handle_client_msg(epollfd, events[n].data.fd);
 			}
 		}
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
