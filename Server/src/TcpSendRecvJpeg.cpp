@@ -16,7 +16,7 @@ static  std::vector<uchar> sendbuff;//buffer for coding
 // jpeg image in side a TCP Stream on the specified TCP local port
 // and Destination. return bytes sent on success and -1 on failure
 //-----------------------------------------------------------------
-int TcpSendImageAsJpeg(TTcpConnectedPort * TcpConnectedPort,cv::Mat *Image)
+int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image)
 {
     unsigned int imagesize;
     cv::imencode(".jpg", *Image, sendbuff, param);
@@ -34,7 +34,7 @@ int TcpSendImageAsJpeg(TTcpConnectedPort * TcpConnectedPort,cv::Mat *Image)
 // jpeg image in side a TCP Stream on the specified TCP local port
 // returns true on success and false on failure
 //-----------------------------------------------------------------
-bool TcpRecvImageAsJpeg(TTcpConnectedPort * TcpConnectedPort,cv::Mat *Image)
+bool TcpRecvImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image)
 {
   unsigned int imagesize;
   unsigned char *buff;	/* receive buffer */   
