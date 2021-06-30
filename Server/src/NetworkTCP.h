@@ -39,22 +39,19 @@ typedef struct
  SOCKET_FD_TYPE ListenFd;
 } TTcpListenPort;
 
-typedef struct
-{
- SOCKET_FD_TYPE ConnectedFd;
-} TTcpConnectedPort;
+typedef int TTcpConnectedPort;
 
 //------------------------------------------------------------------------------------------------
 //  Function Prototypes 
 //------------------------------------------------------------------------------------------------
 TTcpListenPort *OpenTcpListenPort(short localport);
 void CloseTcpListenPort(TTcpListenPort **TcpListenPort);
-TTcpConnectedPort *AcceptTcpConnection(TTcpListenPort *TcpListenPort, 
+TTcpConnectedPort AcceptTcpConnection(TTcpListenPort *TcpListenPort, 
                        struct sockaddr_in *cli_addr,socklen_t *clilen);
-TTcpConnectedPort *OpenTcpConnection(const char *remotehostname, const char * remoteportno);
-void CloseTcpConnectedPort(TTcpConnectedPort **TcpConnectedPort);
-ssize_t ReadDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length);
-ssize_t WriteDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length);
+TTcpConnectedPort OpenTcpConnection(const char *remotehostname, const char * remoteportno);
+void CloseTcpConnectedPort(TTcpConnectedPort TcpConnectedPort);
+ssize_t ReadDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, size_t length);
+ssize_t WriteDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, size_t length);
 #endif
 //------------------------------------------------------------------------------------------------
 //END of Include

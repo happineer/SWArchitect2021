@@ -103,42 +103,34 @@ void CloseTcpListenPort(TTcpListenPort **TcpListenPort)
 // AcceptTcpConnection -Accepts a TCP Connection request from a 
 // Listening port
 //-----------------------------------------------------------------
-TTcpConnectedPort *AcceptTcpConnection(TTcpListenPort *TcpListenPort, 
+TTcpConnectedPort AcceptTcpConnection(TTcpListenPort *TcpListenPort, 
                        struct sockaddr_in *cli_addr,socklen_t *clilen)
 {
-  TTcpConnectedPort *TcpConnectedPort;
-
-  TcpConnectedPort= new (std::nothrow) TTcpConnectedPort;  
+  TTcpConnectedPort TcpConnectedPort = -1;
   
-  if (TcpConnectedPort==NULL)
-     {
-      fprintf(stderr, "TUdpPort memory allocation failed\n");
-      return(NULL);
-     }
-  TcpConnectedPort->ConnectedFd= accept(TcpListenPort->ListenFd,
+  TcpConnectedPort= accept(TcpListenPort->ListenFd,
                       (struct sockaddr *) cli_addr,clilen);
 					  
-  if (TcpConnectedPort->ConnectedFd== BAD_SOCKET_FD) 
+  if (TcpConnectedPort== BAD_SOCKET_FD) 
   {
 	perror("ERROR on accept");
-	delete TcpConnectedPort;
-	return NULL;
+	return -1;
   }
   
  int bufsize = 200 * 1024;
- if (setsockopt(TcpConnectedPort->ConnectedFd, SOL_SOCKET, 
+ if (setsockopt(TcpConnectedPort, SOL_SOCKET, 
                  SO_RCVBUF, (char *)&bufsize, sizeof(bufsize)) == -1)
 	{
-         CloseTcpConnectedPort(&TcpConnectedPort);
+         CloseTcpConnectedPort(TcpConnectedPort);
          perror("setsockopt SO_SNDBUF failed");
-         return(NULL);
+         return(-1);
 	}
- if (setsockopt(TcpConnectedPort->ConnectedFd, SOL_SOCKET, 
+ if (setsockopt(TcpConnectedPort, SOL_SOCKET, 
                  SO_SNDBUF, (char *)&bufsize, sizeof(bufsize)) == -1)
 	{
-         CloseTcpConnectedPort(&TcpConnectedPort);
+         CloseTcpConnectedPort(TcpConnectedPort);
          perror("setsockopt SO_SNDBUF failed");
-         return(NULL);
+         return(-1);
 	}
 
 
@@ -151,33 +143,16 @@ TTcpConnectedPort *AcceptTcpConnection(TTcpListenPort *TcpListenPort,
 // OpenTCPConnection - Creates a TCP Connection to a TCP port
 // accepting connection requests
 //-----------------------------------------------------------------
-TTcpConnectedPort *OpenTcpConnection(const char *remotehostname, const char * remoteportno)
+TTcpConnectedPort OpenTcpConnection(const char *remotehostname, const char * remoteportno)
 {
-  TTcpConnectedPort *TcpConnectedPort;
+  TTcpConnectedPort TcpConnectedPort;
   struct sockaddr_in myaddr;
   int                s;
   struct addrinfo   hints;
   struct addrinfo   *result = NULL;
-
-  TcpConnectedPort= new (std::nothrow) TTcpConnectedPort;  
-  
-  if (TcpConnectedPort==NULL)
-     {
-      fprintf(stderr, "TUdpPort memory allocation failed\n");
-      return(NULL);
-     }
-  TcpConnectedPort->ConnectedFd=BAD_SOCKET_FD;
-  #if  defined(_WIN32) || defined(_WIN64)
-  WSADATA wsaData;
-  int     iResult;
-  iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-  if (iResult != 0) 
-    {
-     delete TcpConnectedPort;
-     printf("WSAStartup failed: %d\n", iResult);
-     return(NULL);
-    }
-#endif
+ 
+  TcpConnectedPort=BAD_SOCKET_FD;
+ 
   // create a socket
    memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_UNSPEC;
@@ -187,46 +162,44 @@ TTcpConnectedPort *OpenTcpConnection(const char *remotehostname, const char * re
   s = getaddrinfo(remotehostname, remoteportno, &hints, &result);
   if (s != 0) 
     {
-	  delete TcpConnectedPort;
       fprintf(stderr, "getaddrinfo: Failed\n");
-      return(NULL);
+      return(-1);
     }
   if ( result==NULL)
     {
-	  delete TcpConnectedPort;
       fprintf(stderr, "getaddrinfo: Failed\n");
-      return(NULL);
+      return(-1);
     }
-  if ((TcpConnectedPort->ConnectedFd= socket(AF_INET, SOCK_STREAM, 0)) == BAD_SOCKET_FD)
+  if ((TcpConnectedPort = socket(AF_INET, SOCK_STREAM, 0)) == BAD_SOCKET_FD)
      {
-      CloseTcpConnectedPort(&TcpConnectedPort);
+      CloseTcpConnectedPort(TcpConnectedPort);
 	  freeaddrinfo(result);
       perror("socket failed");
-      return(NULL);  
+      return(-1);  
      }
 
   int bufsize = 200 * 1024;
-  if (setsockopt(TcpConnectedPort->ConnectedFd, SOL_SOCKET,
+  if (setsockopt(TcpConnectedPort, SOL_SOCKET,
                  SO_SNDBUF, (char *)&bufsize, sizeof(bufsize)) == -1)
 	{
-         CloseTcpConnectedPort(&TcpConnectedPort);
+         CloseTcpConnectedPort(TcpConnectedPort);
          perror("setsockopt SO_SNDBUF failed");
-         return(NULL);
+         return(-1);
 	}
-  if (setsockopt(TcpConnectedPort->ConnectedFd, SOL_SOCKET, 
+  if (setsockopt(TcpConnectedPort, SOL_SOCKET, 
                  SO_RCVBUF, (char *)&bufsize, sizeof(bufsize)) == -1)
 	{
-         CloseTcpConnectedPort(&TcpConnectedPort);
+         CloseTcpConnectedPort(TcpConnectedPort);
          perror("setsockopt SO_SNDBUF failed");
-         return(NULL);
+         return(-1);
 	}
 	 
-  if (connect(TcpConnectedPort->ConnectedFd,result->ai_addr,result->ai_addrlen) < 0) 
+  if (connect(TcpConnectedPort,result->ai_addr,result->ai_addrlen) < 0) 
           {
-	    CloseTcpConnectedPort(&TcpConnectedPort);
+	    CloseTcpConnectedPort(TcpConnectedPort);
 	    freeaddrinfo(result);
             perror("connect failed");
-            return(NULL);
+            return(-1);
 	  }
   freeaddrinfo(result);	 
   return(TcpConnectedPort);
@@ -237,19 +210,13 @@ TTcpConnectedPort *OpenTcpConnection(const char *remotehostname, const char * re
 //-----------------------------------------------------------------
 // CloseTcpConnectedPort - Closes the specified TCP connected port
 //-----------------------------------------------------------------
-void CloseTcpConnectedPort(TTcpConnectedPort **TcpConnectedPort)
+void CloseTcpConnectedPort(TTcpConnectedPort TcpConnectedPort)
 {
-  if ((*TcpConnectedPort)==NULL) return;
-  if ((*TcpConnectedPort)->ConnectedFd!=BAD_SOCKET_FD)  
+  if ((TcpConnectedPort)!=BAD_SOCKET_FD)  
      {
-      CLOSE_SOCKET((*TcpConnectedPort)->ConnectedFd);
-      (*TcpConnectedPort)->ConnectedFd=BAD_SOCKET_FD;
+      CLOSE_SOCKET((TcpConnectedPort));
+      (TcpConnectedPort)=BAD_SOCKET_FD;
      }
-   delete (*TcpConnectedPort);
-  (*TcpConnectedPort)=NULL;
-#if  defined(_WIN32) || defined(_WIN64)
-   WSACleanup();
-#endif
 }
 //-----------------------------------------------------------------
 // END CloseTcpListenPort
@@ -257,13 +224,13 @@ void CloseTcpConnectedPort(TTcpConnectedPort **TcpConnectedPort)
 //-----------------------------------------------------------------
 // ReadDataTcp - Reads the specified amount TCP data 
 //-----------------------------------------------------------------
-ssize_t ReadDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length)
+ssize_t ReadDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, size_t length)
 {
  ssize_t bytes;
  
  for (size_t i = 0; i < length; i += bytes)
     {
-      if ((bytes = recv(TcpConnectedPort->ConnectedFd, (char *)(data+i), length  - i,0)) == -1) 
+      if ((bytes = recv(TcpConnectedPort, (char *)(data+i), length  - i,0)) == -1) 
       {
        return (-1);
       }
@@ -276,13 +243,13 @@ ssize_t ReadDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, siz
 //-----------------------------------------------------------------
 // WriteDataTcp - Writes the specified amount TCP data 
 //-----------------------------------------------------------------
-ssize_t WriteDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length)
+ssize_t WriteDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, size_t length)
 {
   ssize_t total_bytes_written = 0;
   ssize_t bytes_written;
   while (total_bytes_written != length)
     {
-     bytes_written = send(TcpConnectedPort->ConnectedFd,
+     bytes_written = send(TcpConnectedPort,
 	                               (char *)(data+total_bytes_written),
                                   length - total_bytes_written,0);
      if (bytes_written == -1)

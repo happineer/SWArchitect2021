@@ -102,7 +102,7 @@ struct video_buffer {
     uchar* cropped_buffer_gpu[2];
     uchar* cropped_buffer_cpu[2];
 	std::vector<struct Bbox> *detections;
-	TTcpConnectedPort *TcpConnectedPort;
+	TTcpConnectedPort TcpConnectedPort;
 
 	int num_dets;
 	std::vector<cv::Rect> *rects;
@@ -149,7 +149,7 @@ static int video_frames;
 
 static int ring_index;
 
-static TTcpConnectedPort *gTcpConnectedPort;
+static TTcpConnectedPort gTcpConnectedPort = -1;
 
 
 struct ipc {
@@ -584,12 +584,10 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 
 void do_capture(struct task_info *task, struct video_buffer *buffer)
 {
-	static TTcpConnectedPort *TcpConnectedPort = NULL;
 	float* imgOrigin = NULL;	// camera image 
 
 	if (buffer->output == NULL) {
 		printf("[%s]: recv cmd\n", __func__);
-		TcpConnectedPort = gTcpConnectedPort;
 		struct cmd_msg msg;
 		recv_cmd_msg(buffer, &msg);
 		handle_cmd_msg(&msg);
@@ -611,7 +609,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 				printf("Load Failed JPEG.. Maybe EOF\n");
 				assert(0);
 			}
-			buffer->TcpConnectedPort = TcpConnectedPort;
+			buffer->TcpConnectedPort = gTcpConnectedPort;
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 			buffer_count--;
 			DEBUG("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
@@ -788,7 +786,7 @@ static void handle_timer(int fd)
 	printf("[%s] video fps = %d\n", __func__, video_fps);
 }
 
-static void handle_client_msg(TTcpConnectedPort *tcpConnectedPort)
+static void handle_client_msg(TTcpConnectedPort tcpConnectedPort)
 {
 	struct cmd_msg msg;
 	int ret;
@@ -811,15 +809,13 @@ static struct task_info g_task_info[TID_NR] = {
 
 
 
-void start_video_stream(TTcpConnectedPort *tcpConnectedPort)
+void start_video_stream(TTcpConnectedPort tcpConnectedPort)
 {
 	static bool once;
 	int ret;
 
 	if (once)
 		return;
-	
-	gTcpConnectedPort = tcpConnectedPort;
 	
 	struct cmd_msg msg;
 	msg.type = CMD_TYPE_NORMAL;
@@ -834,7 +830,6 @@ void start_video_stream(TTcpConnectedPort *tcpConnectedPort)
 int camera_face_recognition(int argc, char *argv[])
 {
     TTcpListenPort    *TcpListenPort;
-    TTcpConnectedPort *TcpConnectedPort = NULL;
     struct sockaddr_in cli_addr;
     socklen_t          clilen;
     short              listen_port;
@@ -968,29 +963,29 @@ int camera_face_recognition(int argc, char *argv[])
 		
 		for (n = 0; n < nfds; ++n) {
 			if (events[n].data.fd == TcpListenPort->ListenFd) {
-				TTcpConnectedPort *connectedPort = AcceptTcpConnection(TcpListenPort,&cli_addr,&clilen);
-				if (connectedPort == NULL) {  
+				TTcpConnectedPort connectedPort = AcceptTcpConnection(TcpListenPort,&cli_addr,&clilen);
+				if (connectedPort == -1) {  
 					printf("AcceptTcpConnection Failed\n");
 					continue;
 				}
-				if (TcpConnectedPort) {
+				if (gTcpConnectedPort != -1) {
 					printf("Already connected, disconnecting..\n");
-					CloseTcpConnectedPort(&connectedPort);
+					CloseTcpConnectedPort(connectedPort);
 					continue;
 				}
-				TcpConnectedPort = connectedPort;
+				gTcpConnectedPort = connectedPort;
 				printf("Accepted connection Request\n");
-				ev.data.fd = TcpConnectedPort->ConnectedFd;
+				ev.data.fd = gTcpConnectedPort;
 				if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
 					perror("epoll_ctl: conn_sock");
 					exit(EXIT_FAILURE);
 				}
-				start_video_stream(TcpConnectedPort);
+				start_video_stream(gTcpConnectedPort);
 			} else if (events[n].data.fd == timerfd) {
 				handle_timer(timerfd);
 			} else { // timerfd
-				handle_client_msg(TcpConnectedPort);
-				//start_video_stream(TcpConnectedPort);
+				handle_client_msg(gTcpConnectedPort);
+				//start_video_stream(gTcpConnectedPort);
 			}
 		}
         //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
@@ -1000,7 +995,7 @@ int camera_face_recognition(int argc, char *argv[])
     //TODO : CHECK(cudaFreeHost(rgb_cpu));
     //TODO : CHECK(cudaFreeHost(cropped_buffer_cpu[0]));
     //TODO : CHECK(cudaFreeHost(cropped_buffer_cpu[1]));
-    CloseTcpConnectedPort(&TcpConnectedPort); // Close network port;
+    CloseTcpConnectedPort(gTcpConnectedPort); // Close network port;
     CloseTcpListenPort(&TcpListenPort);  // Close listen port
     return 0;
 }
