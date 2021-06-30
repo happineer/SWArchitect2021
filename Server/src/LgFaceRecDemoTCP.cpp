@@ -884,12 +884,26 @@ static int set_rt_policy(int pid)
 	return 0;
 }
 
+static int u_ignore_sigpipe(void) {
+	struct sigaction act;
+
+	if (sigaction(SIGPIPE, (struct sigaction *)NULL, &act) == -1)
+		return -1;
+	if (act.sa_handler == SIG_DFL) {
+		act.sa_handler = SIG_IGN;
+		if (sigaction(SIGPIPE, &act, (struct sigaction *)NULL) == -1)
+			return -1;
+	}
+	return 0;
+}
 
 int main(int argc, char *argv[])
 {
     int state = 0;
 
 	set_rt_policy(getpid());
+
+	u_ignore_sigpipe();
 
     state = camera_face_recognition( argc, argv );
 
