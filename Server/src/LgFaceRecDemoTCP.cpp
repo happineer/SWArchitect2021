@@ -439,7 +439,7 @@ gstCamera* getCamera(){
     return camera;
 }
 
-void compute_duration(struct timespec *specs, int count, int ndets)
+static void compute_duration(struct timespec *specs, int count, int ndets)
 {
 	int i;
 	int n = 0;
@@ -456,7 +456,7 @@ void compute_duration(struct timespec *specs, int count, int ndets)
 	printf("%s\n", buf);
 }
 
-void compute_duration(struct video_buffer *buffer)
+static void compute_duration(struct video_buffer *buffer)
 {
 	int i;
 	int n = 0;
@@ -470,6 +470,8 @@ void compute_duration(struct video_buffer *buffer)
 		diff /= 1000000;
 		n += sprintf(buf + n, " %d", diff);
 	}
+	n += sprintf(buf + n, " %ld.%09ld", buffer->times[buffer->ntimes - 1].tv_sec, 
+		buffer->times[buffer->ntimes - 1].tv_nsec);
 	printf("%s\n", buf);
 }
 
