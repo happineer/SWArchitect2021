@@ -44,6 +44,7 @@
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
+static int face_detect_max = 1000;
 
 static char *video_path;
 
@@ -624,7 +625,7 @@ void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 {
     buffer->num_dets = get_detections(*buffer->origin_cpu, buffer->detections, buffer->rects, buffer->keypoints);
 	DEBUG("[%s]: Frame # : %d FACE # : %d\n", __func__, buffer->frame_number, buffer->num_dets);
-	if (buffer->num_dets <= 0) {
+	if (buffer->num_dets <= 0 || buffer->num_dets > face_detect_max) {
 		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
@@ -635,7 +636,7 @@ void do_face_crop_and_align(struct task_info *task, struct video_buffer *buffer)
 
 void do_face_embede(struct task_info *task, struct video_buffer *buffer)
 {
-	if (buffer->num_dets <= 0) {
+	if (buffer->num_dets <= 0 || buffer->num_dets > face_detect_max) {
 		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
@@ -646,7 +647,7 @@ void do_face_embede(struct task_info *task, struct video_buffer *buffer)
 
 void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 {
-	if (buffer->num_dets <= 0) {
+	if (buffer->num_dets <= 0 || buffer->num_dets > face_detect_max) {
 		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
 	}
@@ -945,6 +946,17 @@ static int u_ignore_sigpipe(void) {
 	return 0;
 }
 
+static void get_env_value(void)
+{
+	char *value;
+
+	value = getenv("FACE_DETECT_MAX");
+	if (value) {
+		face_detect_max = strtol(value, NULL, 0);
+		printf("[%s] FACE_DETECT_MAX face_detect_max = %d\n", __func__, face_detect_max);
+	}
+}
+
 int main(int argc, char *argv[])
 {
     int state = 0;
@@ -952,6 +964,8 @@ int main(int argc, char *argv[])
 	set_rt_policy(getpid());
 
 	u_ignore_sigpipe();
+
+	get_env_value();
 
     state = camera_face_recognition( argc, argv );
 
