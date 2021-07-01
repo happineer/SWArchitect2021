@@ -116,6 +116,7 @@ struct video_buffer {
 	struct timespec times[TIME_STAMP_NR];
 };
 
+static const int MJPEG_FILE_BUF_SIZE = (512 * 1024);
 typedef struct {
     ifstream    mpegfile;
     int         width;
@@ -125,6 +126,9 @@ typedef struct {
     imageFormat inputFormat;
     size_t      inputImageSize;
     int         filesize;
+	int         pos;
+	int         buf_size;
+	unsigned char *buff;
 } TMotionJpegFileDesc;
 
 struct task_info {
@@ -295,6 +299,9 @@ static bool RewindMotionJpegFile(TMotionJpegFileDesc *FileDesc)
 	FrameCount = 0;
 	face_detect_acc_test_mode = 0;
     FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
+	FileDesc->pos = 8;
+
+	cout << "FileDesc->mpegfile.tellg() : " << FileDesc->mpegfile.tellg() << endl;
 
     return true;
 }
@@ -312,6 +319,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
     }
 
   // get length of file:
+  	FileDesc->pos = 0;
     FileDesc->mpegfile.seekg (0, FileDesc->mpegfile.end);
     FileDesc->filesize = FileDesc->mpegfile.tellg();
     FileDesc->mpegfile.seekg (0, FileDesc->mpegfile.beg);
@@ -322,7 +330,7 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         FileDesc->mpegfile.close();
         return(false);
     }
-
+	FileDesc->pos += sizeof(FileDesc->width);
 
     FileDesc->mpegfile.read((char*)&FileDesc->height, sizeof(FileDesc->height));
     if (FileDesc->mpegfile.gcount() != sizeof(FileDesc->height)) 
@@ -330,7 +338,10 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         FileDesc->mpegfile.close();
         return(false);
     }
+	FileDesc->pos += sizeof(FileDesc->height);
 
+	FileDesc->buf_size = MJPEG_FILE_BUF_SIZE;
+	FileDesc->buff = (unsigned char *)malloc(FileDesc->buf_size);
 
     FileDesc->width=ntohl(FileDesc->width);
     FileDesc->height=ntohl(FileDesc->height);
@@ -367,6 +378,9 @@ static bool CloseMotionJpegFile(TMotionJpegFileDesc *FileDesc)
     if (!FileDesc)  return false;
     FileDesc->mpegfile.close();
 
+	if (FileDesc->buff) {
+		free(FileDesc->buff);
+	}
     CUDA(cudaFreeHost(FileDesc->inputImgGPU));
 	for (int i = 0; i < MJPEG_OUT_BUF_NR; i++) {
 	    // TODO CHECK(cudaFreeHost(FileDesc->output[i]))
@@ -413,8 +427,15 @@ static inline bool ReadMotionJpeg(TMotionJpegFileDesc *FileDesc, unsigned char *
 {
 	static unsigned int max_imagesize;
 
+	if (FileDesc->pos >= (FileDesc->filesize - 4)) {
+		printf("[%s] FILE EOF, FileSize : %d Pos: %d\n", 
+			__func__, FileDesc->filesize, FileDesc->pos);
+		return false;
+	}
+
 	FileDesc->mpegfile.read((char*)&imagesize, sizeof(imagesize));
     if (FileDesc->mpegfile.gcount() != sizeof(imagesize)) return(0);
+	FileDesc->pos += sizeof(imagesize);
     imagesize = ntohl(imagesize);
 	if (imagesize > max_imagesize) {
 		max_imagesize = imagesize;
@@ -425,6 +446,7 @@ static inline bool ReadMotionJpeg(TMotionJpegFileDesc *FileDesc, unsigned char *
     {
         return false;
     }
+	FileDesc->pos += imagesize;
 	
     FrameCount++;
 
@@ -433,9 +455,7 @@ static inline bool ReadMotionJpeg(TMotionJpegFileDesc *FileDesc, unsigned char *
 
 static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buffer **output)
 {
-	const static int buf_size = 512 * 1024;
     unsigned int imagesize;
-    static unsigned char* buff;
 
     // validate parameters
     if( !FileDesc)
@@ -443,9 +463,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
         printf("LOG_IMAGE LoadMJpegFrame() - invalid parameter(s)\n");
         return false;
     }
-	if (!buff) {
-		buff = (unsigned char *)malloc(buf_size);
-	}
 
 	struct video_buffer *vp = &FileDesc->buffer[ring_index];
 
@@ -453,19 +470,18 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 	video_buffer_mark_time(vp);
 
 	do {
-		if (!ReadMotionJpeg(FileDesc, buff, imagesize)) {
+		if (!ReadMotionJpeg(FileDesc, FileDesc->buff, imagesize)) {
 			return false;
 		}
 	} while (face_detect_acc_test_mode && !is_acc_test_frame(FrameCount));
 
     cv::Mat img;
-    cv::imdecode(cv::Mat(imagesize, 1, CV_8UC1, buff), cv::IMREAD_COLOR, &img);
+    cv::imdecode(cv::Mat(imagesize, 1, CV_8UC1, FileDesc->buff), cv::IMREAD_COLOR, &img);
     if (img.empty()) 
     {
         printf("cv::imdecode failed\n");
         return(false);
     }
-
 
     memcpy(FileDesc->inputImgGPU, img.data, imageFormatSize(FileDesc->inputFormat, FileDesc->width, FileDesc->height));
 
@@ -484,7 +500,7 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 	vp->frame_number = FrameCount;
     printf("FrameCount %d\n",FrameCount);
 
-	if (FileDesc->mpegfile.tellg() >= (FileDesc->filesize - 4)) {
+	if (FileDesc->pos >= (FileDesc->filesize - 4)) {
 		printf("[%s] FILE EOF, FrameCount : %d rewinding... \n", __func__, FrameCount);
 		RewindMotionJpegFile(FileDesc);
 	}
