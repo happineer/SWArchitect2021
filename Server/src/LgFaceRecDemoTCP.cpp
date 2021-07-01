@@ -45,6 +45,7 @@ static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
 static int face_detect_max = 1000;
+static int face_detect_acc_test_mode;
 
 static char *video_path;
 
@@ -291,6 +292,8 @@ static bool RewindMotionJpegFile(TMotionJpegFileDesc *FileDesc)
     if (!FileDesc)
 		return false;
 
+	FrameCount = 0;
+	face_detect_acc_test_mode = 0;
     FileDesc->mpegfile.seekg(8, FileDesc->mpegfile.beg);
 
     return true;
@@ -373,11 +376,66 @@ static bool CloseMotionJpegFile(TMotionJpegFileDesc *FileDesc)
 /***********************************************************************************************/
 /***********************************************************************************************/
 /***********************************************************************************************/
+static inline bool is_acc_test_frame(int frame)
+{
+#define ACC_FRAME_NR		25
+	const static int AccTestFrames[ACC_FRAME_NR] = {
+			153, 201, 221, 339, 504, 
+            700, 910, 1007, 1173, 1279,
+            1355, 1397, 1408, 1470, 1606,
+            1687, 1711, 1878, 1895, 1969,
+            2256, 2440, 2747, 2966, 3033
+	};
+	static int acc_idx;
+
+	if (frame < AccTestFrames[acc_idx])
+		return false;
+
+	if (frame == AccTestFrames[acc_idx]) {
+		printf("[%s] FOUND frame : %d, accFrame : %d acc_idx : %d\n",
+			__func__, frame, AccTestFrames[acc_idx], acc_idx);
+		acc_idx = (acc_idx + 1) % ACC_FRAME_NR;
+		if (acc_idx == 0) {
+			printf("[%s] AccTestFrames END frame : %d, acc_idx : %d\n",
+				__func__, frame, acc_idx);
+		}
+		
+		return true;
+	}
+
+	printf("[%s] ERROR frame : %d, accFrame : %d acc_idx : %d\n",
+		__func__, frame, AccTestFrames[acc_idx], acc_idx);
+
+	return false;
+}
+
+static inline bool ReadMotionJpeg(TMotionJpegFileDesc *FileDesc, unsigned char *buf, unsigned int &imagesize)
+{
+	static unsigned int max_imagesize;
+
+	FileDesc->mpegfile.read((char*)&imagesize, sizeof(imagesize));
+    if (FileDesc->mpegfile.gcount() != sizeof(imagesize)) return(0);
+    imagesize = ntohl(imagesize);
+	if (imagesize > max_imagesize) {
+		max_imagesize = imagesize;
+		printf("LoadMJpegFrame() max_imagesize = %d (%d KB)\n", max_imagesize, max_imagesize / 1024);
+	}
+    FileDesc->mpegfile.read((char*)buf, imagesize);
+    if (FileDesc->mpegfile.gcount() != imagesize)
+    {
+        return false;
+    }
+	
+    FrameCount++;
+
+	return true;
+}
 
 static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buffer **output)
 {
+	const static int buf_size = 512 * 1024;
     unsigned int imagesize;
-    unsigned char* buff;
+    static unsigned char* buff;
 
     // validate parameters
     if( !FileDesc)
@@ -385,26 +443,23 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
         printf("LOG_IMAGE LoadMJpegFrame() - invalid parameter(s)\n");
         return false;
     }
+	if (!buff) {
+		buff = (unsigned char *)malloc(buf_size);
+	}
 
 	struct video_buffer *vp = &FileDesc->buffer[ring_index];
 
 	video_buffer_init(vp);
 	video_buffer_mark_time(vp);
-    FileDesc->mpegfile.read((char*)&imagesize, sizeof(imagesize));
-    if (FileDesc->mpegfile.gcount() != sizeof(imagesize)) return(0);
-    imagesize = ntohl(imagesize);
-    buff = new (std::nothrow) unsigned char[imagesize];
-    if (buff == NULL) return 0;
-    FileDesc->mpegfile.read((char*)buff, imagesize);
-    if (FileDesc->mpegfile.gcount() != imagesize)
-    {
-        delete[] buff;
-        return false;
-    }
+
+	do {
+		if (!ReadMotionJpeg(FileDesc, buff, imagesize)) {
+			return false;
+		}
+	} while (face_detect_acc_test_mode && !is_acc_test_frame(FrameCount));
 
     cv::Mat img;
     cv::imdecode(cv::Mat(imagesize, 1, CV_8UC1, buff), cv::IMREAD_COLOR, &img);
-    delete[] buff;
     if (img.empty()) 
     {
         printf("cv::imdecode failed\n");
@@ -426,12 +481,11 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
     
 	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
 
-    FrameCount++;
 	vp->frame_number = FrameCount;
     printf("FrameCount %d\n",FrameCount);
 
 	if (FileDesc->mpegfile.tellg() >= (FileDesc->filesize - 4)) {
-		printf("[%s] FILE EOF, rewinding...\n", __func__);
+		printf("[%s] FILE EOF, FrameCount : %d rewinding... \n", __func__, FrameCount);
 		RewindMotionJpegFile(FileDesc);
 	}
 
@@ -573,6 +627,9 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 		break;
 
 	case CMD_TEST_ACC:
+		printf("[%s]: CMD_TEST_ACC\n", __func__);
+		RewindMotionJpegFile(&MotionJpegFd);
+		face_detect_acc_test_mode = 1;
 		break;
 
 	default:
@@ -609,7 +666,8 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 		while (buffer_count > MJPEG_OUT_BUF_LOW) {
             if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
 				printf("Load Failed JPEG.. Maybe EOF\n");
-				assert(0);
+				break;
+				//assert(0);
 			}
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
 			buffer_count--;
