@@ -88,6 +88,7 @@ enum CMD_TYPE {
 };
 
 enum CMD_VALUE {
+	CMD_PLAY_STOP		= 0x0,
 	CMD_RUN_MODE 		= 0x1,
 	CMD_TEST_RUN_MODE	= 0x2,
 	CMD_TEST_ACC		= 0x3,
@@ -131,10 +132,13 @@ typedef struct {
 	unsigned char *buff;
 } TMotionJpegFileDesc;
 
+typedef void (*work_func)(struct task_info *, struct video_buffer *);
+#define WORK_FUNC_NR		3
+
 struct task_info {
 	int tid;
 	void* (*task_func)(void *);
-	void (*do_work)(struct task_info *, struct video_buffer *);
+	work_func do_work[WORK_FUNC_NR];
 	int running;
 	mtcnn *finder;
 	face_embedder *embedder;                         // deserialize recognition network 
@@ -150,6 +154,11 @@ static int imgHeight;
 
 static int video_fps;
 static int video_frames;
+
+// calculate fps
+static double send_fps = 0.0;
+static clock_t pre_clk;
+
 
 static int ring_index;
 
@@ -634,7 +643,12 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 
 	switch (msg->value)
 	{
+	case CMD_PLAY_STOP:
+		printf("[%s]: CMD_PLAY_STOP\n", __func__);
+		break;
+
 	case CMD_RUN_MODE:
+		printf("[%s]: CMD_RUN_MODE\n", __func__);
 		break;
 
 	case CMD_TEST_RUN_MODE:
@@ -767,8 +781,12 @@ void *video_task_face_detect(void *args)
 		assert(nread == sizeof(buffer));
 
 		video_buffer_mark_time(buffer);
-		if (task->do_work)
-			task->do_work(task, buffer);
+		for (int i = 0; i < WORK_FUNC_NR; i++) {
+			if (task->do_work[i])
+				task->do_work[i](task, buffer);
+			else
+				break;
+		}
 		video_buffer_mark_time(buffer);
 		
 		int nwritten = write(ipcs[tid].sock[IPC_SEND], &buffer, sizeof(buffer));
@@ -836,17 +854,21 @@ static void diconnect_client(void)
 	return;
 }
 
-
-static void do_send_video(struct task_info *task, struct video_buffer *buffer)
+static void do_draw_fps(struct task_info *task, struct video_buffer *buffer)
 {
-	int nread;
 	char str[256];
-
-	sprintf(str, "TensorRT  %d FPS", video_fps);
+	sprintf(str, "TensorRT  %d %.2f FPS", video_fps, send_fps);
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
+	
+}
+
+static void do_send_video(struct task_info *task, struct video_buffer *buffer)
+{
+	int nread;
+	clock_t clk;
 
 	if (gTcpConnectedPort == -1)
 		return;
@@ -857,6 +879,9 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 		return;
 		assert(0);
 	}
+	clk = clock();
+	send_fps = (0.90 * send_fps) + (0.1 * (1 / ((double)(clk - pre_clk) / CLOCKS_PER_SEC)));
+	pre_clk = clk;
 	video_frames++;
 }
 
@@ -897,12 +922,12 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 }
 
 static struct task_info g_task_info[TID_NR] = {
-	{ TID_CAPTURE,         video_task_reader,      /*do_capture*/ },
-  	{ TID_FACE_DETECT,     video_task_face_detect, do_face_detect, },
-	{ TID_FACE_RECOGNIZE1, video_task_face_detect, do_face_crop_and_align, },
-	{ TID_FACE_RECOGNIZE2, video_task_face_detect, do_face_embede, },
-	{ TID_FACE_RECOGNIZE3, video_task_face_detect, do_face_predict, },
-	{ TID_SENDER,          video_task_face_detect, do_send_video, }
+	{ TID_CAPTURE,         video_task_reader,      { 0, /*do_capture*/ }, },
+  	{ TID_FACE_DETECT,     video_task_face_detect, { do_face_detect,},  },
+	{ TID_FACE_RECOGNIZE1, video_task_face_detect, { do_face_crop_and_align, }, },
+	{ TID_FACE_RECOGNIZE2, video_task_face_detect, { do_face_embede }, },
+	{ TID_FACE_RECOGNIZE3, video_task_face_detect, { do_face_predict, do_draw_fps, }, },
+	{ TID_SENDER,          video_task_face_detect, { do_send_video, }, }
 };
 
 
@@ -985,10 +1010,6 @@ int camera_face_recognition(int argc, char *argv[])
     cudaAllocMapped( (void**) &cropped_buffer_cpu[0], (void**) &cropped_buffer_gpu[0], 150*150*3*sizeof(uchar) );
     cudaAllocMapped( (void**) &cropped_buffer_cpu[1], (void**) &cropped_buffer_gpu[1], 150*150*3*sizeof(uchar) );
 #endif
-
-    // calculate fps
-    double fps = 0.0;
-    clock_t clk;
 
     // Detection vars
     std::vector<std::string> label_encodings;       // vector for the real names of the classes/persons
@@ -1080,7 +1101,6 @@ int camera_face_recognition(int argc, char *argv[])
 				handle_client_msg(epollfd, events[n].data.fd);
 			}
 		}
-        //fps = (0.90 * fps) + (0.1 * (1 / ((double)(clock()-clk)/CLOCKS_PER_SEC)));    
     }   
 
     SAFE_DELETE(g_camera);
