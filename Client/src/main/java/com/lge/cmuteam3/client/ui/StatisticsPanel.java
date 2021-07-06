@@ -1,15 +1,14 @@
 package com.lge.cmuteam3.client.ui;
 
-import java.awt.Dimension;
-
-import javax.swing.BoxLayout;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.swing.*;
+import java.awt.*;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class StatisticsPanel extends JPanel {
 	private static final int TEXTFIELD_WIDTH = 150;
@@ -26,6 +25,12 @@ public class StatisticsPanel extends JPanel {
 	private final JTextField minLatencyTextField;
 	private final JLabel avrLatencyLabel;
 	private final JTextField avrLatencyTextField;
+	private final JLabel fullTimeFpsLabel;
+	private final JTextField fullTimeFpsTextField;
+	private final JLabel fpsLabel;
+	private final JTextField fpsTextField;
+	private final JLabel elapsedTimeLabel;
+	private final JTextField elapsedTimeTextField;
 
 	public StatisticsPanel() {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -54,6 +59,23 @@ public class StatisticsPanel extends JPanel {
 
 		avrLatencyTextField = new JTextField();
 		setCommonStyleTextField(avrLatencyTextField);
+		
+		fullTimeFpsLabel = new JLabel("Full-time FPS");
+		add(fullTimeFpsLabel);
+
+		fullTimeFpsTextField = new JTextField();
+		setCommonStyleTextField(fullTimeFpsTextField);
+
+		fpsLabel = new JLabel("FPS");
+		add(fpsLabel);
+
+		fpsTextField = new JTextField();
+		setCommonStyleTextField(fpsTextField);
+
+		elapsedTimeLabel = new JLabel("Elapsed Time");
+		add(elapsedTimeLabel);
+		elapsedTimeTextField = new JTextField();
+		setCommonStyleTextField(elapsedTimeTextField);
 	}
 
 	private void setCommonStyleTextField(JTextField textField) {
@@ -71,18 +93,30 @@ public class StatisticsPanel extends JPanel {
 		field.setMaximumSize(curd);
 	}
 
-	public void update(long frame, long max, long min, long avr) {
+	public void update(long frame, long max, long min, long avr, double fullTimeFps, double fps, long elapsedTime) {
 		frameTextField.setText(Long.toString(frame));
 		maxLatencyTextField.setText(Long.toString(max));
 		minLatencyTextField.setText(Long.toString(min));
 		avrLatencyTextField.setText(Long.toString(avr));
+		fullTimeFpsTextField.setText(String.format("%.4f", fullTimeFps));
+		fpsTextField.setText(String.format("%.4f", fps));
+
+		String dateFormatted = formatTime(elapsedTime);
+		elapsedTimeTextField.setText(dateFormatted);
+	}
+
+	private String formatTime(long elapsedTime) {
+		Date date = new Date(elapsedTime);
+		DateFormat formatter = new SimpleDateFormat("HH:mm:ss.SSS");
+		formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+		return formatter.format(date);
 	}
 
 	public void update(UiModel uiModel) {
-		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr());
+		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr(), uiModel.getFullTimeFps(), uiModel.getFps(), uiModel.getElapsedTime());
 	}
 
 	public void reset() {
-		update(0, 0, 0, 0);
+		update(0, 0, 0, 0, 0, 0, 0);
 	}
 }

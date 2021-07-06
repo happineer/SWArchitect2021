@@ -2,6 +2,8 @@ package mode;
 
 import com.lge.cmuteam3.client.ui.UiController;
 
+import java.awt.*;
+
 public abstract class BaseMode implements Mode {
     private final UiController uiController;
 
@@ -10,7 +12,9 @@ public abstract class BaseMode implements Mode {
     }
 
     void appendUiLog(String message) {
-        uiController.appendLog(message);
+        EventQueue.invokeLater(() -> {
+            uiController.appendLog(message);
+        });
     }
 
     /**

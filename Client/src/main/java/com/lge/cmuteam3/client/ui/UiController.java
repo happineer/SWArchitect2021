@@ -1,23 +1,41 @@
 package com.lge.cmuteam3.client.ui;
 
+import com.lge.cmuteam3.client.FileProperties;
 import mode.Mode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.image.BufferedImage;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class UiController {
+    private static final Logger LOG = LoggerFactory.getLogger(UiController.class);
+
     private final BaseFrame frame;
     private final StatisticsPanel statisticsPanel;
 
-    private UiModel uiModel;
+    private UiModel uiModel = new UiModel();
+    private final ScheduledExecutorService executor;
+    private ScheduledFuture<?> future;
 
     public UiController(BaseFrame frame) {
         this.frame = frame;
 
         statisticsPanel = frame.getStatisticsPanel();
+
+        executor = Executors.newSingleThreadScheduledExecutor();
+
+        FileProperties prop = FileProperties.getInstance();
+        String serverIp = prop.getProperty("server.ip");
+        int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
+        updateServerInfo(serverIp, serverTransferPort);
     }
 
     public void setModePanel(List<Mode> modeList, OnUiEventListener modeManager) {
@@ -66,14 +84,37 @@ public class UiController {
     }
 
     public void reset() {
+        uiModel = new UiModel();
+
         frame.cleanImage();
         uiModel = new UiModel();
         statisticsPanel.reset();
     }
 
     public void updateImage(BufferedImage image) {
-        frame.updateImage(image);
         uiModel.updateImageAdded();
+
+        frame.updateImage(image);
         statisticsPanel.update(uiModel);
+    }
+
+    public void updateHistogram() {
+        if (uiModel == null) {
+            LOG.info("UiModel is not prepared.");
+            return;
+        }
+        double[] data = uiModel.getHistogramData();
+        LOG.info("data size:" + data.length);
+        frame.updateChart(data);
+    }
+
+    public void runHistogramUpdater() {
+        future = executor.scheduleAtFixedRate(this::updateHistogram, 1000,4000, TimeUnit.MILLISECONDS);
+    }
+
+    public void stopHistogramUpdater() {
+        if (future != null) {
+            future.cancel(true);
+        }
     }
 }

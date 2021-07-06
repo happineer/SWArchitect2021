@@ -5,6 +5,8 @@ import com.lge.cmuteam3.client.ui.UiController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ModeManager implements OnUiEventListener {
 
@@ -43,7 +45,10 @@ public class ModeManager implements OnUiEventListener {
 	@Override
 	public void onUiStart(Mode mode) {
 		currentMode = mode;
-		mode.start();
+		ExecutorService exec = Executors.newSingleThreadExecutor();
+		exec.submit(() -> {
+			currentMode.start();
+		});
 	}
 
 	@Override

@@ -1,6 +1,5 @@
 package com.lge.cmuteam3.client;
 
-import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.BaseFrame;
 
 import com.lge.cmuteam3.client.ui.UiController;
