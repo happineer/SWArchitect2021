@@ -26,6 +26,7 @@ public class RunMode extends BaseMode {
 		Socket socket = networkManager.getNanoSocket();
 		if (socket == null) {
 			appendUiLog("Run Mode failed.");
+			return;
 		}
 
 		appendUiLog("Run Mode start");

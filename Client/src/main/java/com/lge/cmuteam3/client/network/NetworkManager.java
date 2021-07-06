@@ -36,7 +36,7 @@ public class NetworkManager {
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			return nanoSocket;
 		} catch (Exception e) {
-			LOG.info("Connection failed!!!!"+e.getMessage());
+			LOG.info("Connection failed! : " + e.getMessage());
 			nanoSocket = null;
 			return null;
 		}

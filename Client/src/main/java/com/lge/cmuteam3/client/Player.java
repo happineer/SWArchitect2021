@@ -40,6 +40,8 @@ public class Player implements OnConnectListener {
         } else {
             showLog("Not running!");
         }
+
+        uiController.stopHistogramUpdater();
     }
 
     private class Scheduler extends TimerTask {
@@ -77,6 +79,7 @@ public class Player implements OnConnectListener {
 
     public void start(Socket socket) {
         playImages(socket);
+        uiController.runHistogramUpdater();
     }
 
     private void playImages(Socket socket) {
@@ -116,6 +119,8 @@ public class Player implements OnConnectListener {
             task.cancel();
             task = null;
         }
+
+        uiController.stopHistogramUpdater();
 
         running = false;
     }

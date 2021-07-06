@@ -803,6 +803,7 @@ void do_face_embede(struct task_info *task, struct video_buffer *buffer)
 
 void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 {
+	clock_t first_time = clock();
 	if (buffer->num_dets <= 0 || buffer->num_dets > face_detect_max) {
 		DEBUG("[%s]: Frame # : %d  NO FACE : %d\n", __func__, buffer->frame_number, buffer->num_dets);
 		return;
@@ -813,6 +814,8 @@ void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 
     // draw bounding boxes and labels to the original image 
     draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
+	
+	cout<<"retro "<<1000*double(clock()-first_time)/CLOCKS_PER_SEC<<endl;
 }
 
 void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
@@ -842,12 +845,13 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 	int nread;
 	char str[256];
 
+	clock_t first_time = clock();
 	sprintf(str, "TensorRT  %d FPS", video_fps);
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0, 0, 0, 255), 1);
-
+	cout<<"retro-time "<<1000*double(clock()-first_time)/CLOCKS_PER_SEC<<endl;
 	if (gTcpConnectedPort == -1)
 		return;
 

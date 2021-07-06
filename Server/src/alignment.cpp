@@ -211,6 +211,8 @@ void draw_detections(   cv::Mat &origin_cpu,
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255,255), 3 ); // mat, text, coord, font, scale, bgr color, line thickness
         cv::putText(origin_cpu, encoding , cv::Point(rects->at(i).x,rects->at(i).y), 
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0,0,0,255), 1 );
+        cv::putText(origin_cpu, "06272021_110735" , cv::Point(rects->at(i).x + 10,rects->at(i).y), 
+                    cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0,0,0,255), 1 );
 
     }                        
 }

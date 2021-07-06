@@ -26,6 +26,10 @@ public class StatisticsPanel extends JPanel {
 	private final JTextField minLatencyTextField;
 	private final JLabel avrLatencyLabel;
 	private final JTextField avrLatencyTextField;
+	private final JLabel fullTimeFpsLabel;
+	private final JTextField fullTimeFpsTextField;
+	private final JLabel fpsLabel;
+	private final JTextField fpsTextField;
 
 	public StatisticsPanel() {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -54,6 +58,18 @@ public class StatisticsPanel extends JPanel {
 
 		avrLatencyTextField = new JTextField();
 		setCommonStyleTextField(avrLatencyTextField);
+		
+		fullTimeFpsLabel = new JLabel("Full-time FPS");
+		add(fullTimeFpsLabel);
+
+		fullTimeFpsTextField = new JTextField();
+		setCommonStyleTextField(fullTimeFpsTextField);
+
+		fpsLabel = new JLabel("FPS");
+		add(fpsLabel);
+
+		fpsTextField = new JTextField();
+		setCommonStyleTextField(fpsTextField);
 	}
 
 	private void setCommonStyleTextField(JTextField textField) {
@@ -71,18 +87,20 @@ public class StatisticsPanel extends JPanel {
 		field.setMaximumSize(curd);
 	}
 
-	public void update(long frame, long max, long min, long avr) {
+	public void update(long frame, long max, long min, long avr, double fullTimeFps, double fps) {
 		frameTextField.setText(Long.toString(frame));
 		maxLatencyTextField.setText(Long.toString(max));
 		minLatencyTextField.setText(Long.toString(min));
 		avrLatencyTextField.setText(Long.toString(avr));
+		fullTimeFpsTextField.setText(String.format("%.4f", fullTimeFps));
+		fpsTextField.setText(String.format("%.4f", fps));
 	}
 
 	public void update(UiModel uiModel) {
-		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr());
+		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr(), uiModel.getFullTimeFps(), uiModel.getFps());
 	}
 
 	public void reset() {
-		update(0, 0, 0, 0);
+		update(0, 0, 0, 0, 0, 0);
 	}
 }

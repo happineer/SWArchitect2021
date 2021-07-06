@@ -1,5 +1,14 @@
 package com.lge.cmuteam3.client.ui;
 
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.data.statistics.HistogramDataset;
+import org.jfree.data.statistics.HistogramType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
@@ -8,6 +17,8 @@ import java.awt.event.*;
 import java.awt.image.BufferedImage;
 
 public class BaseFrame extends JFrame {
+	private static final Logger LOG = LoggerFactory.getLogger(BaseFrame.class);
+
 	private static final long serialVersionUID = -2860632918949315691L;
 
 	private JPanel contentPane;
@@ -21,13 +32,13 @@ public class BaseFrame extends JFrame {
 	private StatisticsPanel statisticsPanel;
 	private JPanel bottomPanel;
 	private JPanel jitterPanel;
-	private JLabel jitterLabel;
 
 	public JPanel getTopPanel() {
 		return topPanel;
 	}
 
 	private final JPanel topPanel;
+	private JPanel chartPanel;
 
 	public JLabel getImageView() {
 		return imageView;
@@ -48,7 +59,7 @@ public class BaseFrame extends JFrame {
 	public BaseFrame() {
 		setTitle("CMU LG SW Architect Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 750, 900);
+		setBounds(100, 100, 1500, 900);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
@@ -84,10 +95,7 @@ public class BaseFrame extends JFrame {
 
 		jitterPanel = new JPanel();
 		bottomPanel.add(jitterPanel);
-
-		jitterLabel = new JLabel("Jitter Histogram");
-		jitterLabel.setHorizontalAlignment(SwingConstants.LEFT);
-		jitterPanel.add(jitterLabel);
+		jitterPanel.setLayout(new BoxLayout(jitterPanel, BoxLayout.X_AXIS));
 
 		statisticsPanel = new StatisticsPanel();
 		contentPane.add(statisticsPanel, BorderLayout.WEST);
@@ -107,7 +115,7 @@ public class BaseFrame extends JFrame {
 			}
 		}, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
 	}
-	
+
 	private void onCancel() {
 		// add your code here if necessary
 		dispose();
@@ -129,5 +137,28 @@ public class BaseFrame extends JFrame {
 
 	void clearLog() {
 		logArea.replaceRange("", 0, logArea.getDocument().getLength());
+	}
+
+	void updateChart(double[] data) {
+		if (data == null || data.length == 0) {
+			LOG.info("No data to display on the chart.");
+			return;
+		}
+
+		HistogramDataset dataset = new HistogramDataset();
+		dataset.setType(HistogramType.FREQUENCY);
+		dataset.addSeries("Hist", data, 30);
+
+		JFreeChart chart = ChartFactory.createHistogram(null, "ms", "Count", dataset, PlotOrientation.VERTICAL,
+				false, false, false);
+
+		EventQueue.invokeLater(() -> {
+			ChartPanel panel = new ChartPanel(chart);
+			panel.setPreferredSize(new Dimension(700, 230));
+
+			jitterPanel.removeAll();
+			jitterPanel.add(panel);
+			jitterPanel.revalidate();
+		});
 	}
 }
