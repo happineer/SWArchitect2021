@@ -123,7 +123,6 @@ typedef struct {
     int         width;
     int         height;
     void        *inputImgGPU;
-    struct video_buffer buffer[MJPEG_OUT_BUF_NR];
     imageFormat inputFormat;
     size_t      inputImageSize;
     int         filesize;
@@ -160,6 +159,8 @@ static double send_fps = 0.0;
 static clock_t pre_clk;
 
 
+static struct video_buffer ring_buffer[MJPEG_OUT_BUF_NR];
+static size_t buf_img_size;
 static int ring_index;
 
 static TTcpConnectedPort gTcpConnectedPort = -1;
@@ -297,6 +298,27 @@ static bool video_buffer_alloc(struct video_buffer *vbs, size_t imgSize)
 }
 
 
+static inline struct video_buffer *video_buffer_get_next(void)
+{
+	struct video_buffer *vp = &ring_buffer[ring_index];
+	ring_index++;
+	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
+
+	return vp;
+}
+
+static inline struct video_buffer *video_buffer_get_current(void)
+{
+	struct video_buffer *vp = &ring_buffer[ring_index];
+	return vp;
+}
+
+static inline void video_buffer_next(void)
+{
+	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
+}
+
+
 /***********************************************************************************************/
 /***********************************************************************************************/
 /***********************************************************************************************/
@@ -359,10 +381,11 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
     FileDesc->inputFormat = IMAGE_RGB8;
     FileDesc->inputImageSize = (FileDesc->width * FileDesc->height*(sizeof(uchar3) * 8))/8;
     FileDesc->inputImgGPU = NULL;
-	memset(FileDesc->buffer, 0, sizeof(FileDesc->buffer));
+
 
     // allocate CUDA buffer for the image
-    const size_t imgSize = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
+	buf_img_size = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
+	printf("[%s]: buf_img_size = %ld\n", __func__, buf_img_size);
 
     // convert from uint8 to float
 
@@ -371,8 +394,6 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
         printf("LOG_IMAGE loadImage() -- failed to allocate %zu bytes for image \n", FileDesc->inputImageSize);
         return false;
     }
-
-	video_buffer_alloc(FileDesc->buffer, imgSize);
 
     printf("Open width %d height %d\n",*Width,*Height);
     return true;
@@ -462,7 +483,7 @@ static inline bool ReadMotionJpeg(TMotionJpegFileDesc *FileDesc, unsigned char *
 	return true;
 }
 
-static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buffer **output)
+static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buffer *&vp)
 {
     unsigned int imagesize;
 
@@ -472,8 +493,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
         printf("LOG_IMAGE LoadMJpegFrame() - invalid parameter(s)\n");
         return false;
     }
-
-	struct video_buffer *vp = &FileDesc->buffer[ring_index];
 
 	video_buffer_init(vp);
 	video_buffer_mark_time(vp);
@@ -502,9 +521,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
     }
 
 	cudaRGBA32ToRGB8((float4*)vp->output, (uchar3*)vp->rgb_gpu, imgWidth, imgHeight);  
-    *output = vp;
-    
-	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
 
 	vp->frame_number = FrameCount;
     printf("FrameCount %d\n",FrameCount);
@@ -694,12 +710,15 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
     else
     {
 		while (buffer_count > MJPEG_OUT_BUF_LOW) {
-            if (!LoadMotionJpegFrame(&MotionJpegFd, &buffer)) {
+			struct video_buffer *vp = video_buffer_get_current();
+            if (!LoadMotionJpegFrame(&MotionJpegFd, vp)) {
 				printf("Load Failed JPEG.. Maybe EOF\n");
 				break;
 				//assert(0);
 			}
-			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &buffer, sizeof(buffer));
+			video_buffer_next();
+			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &vp, sizeof(vp));
+
 			buffer_count--;
 			DEBUG("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
 			usleep(1000);
@@ -857,7 +876,12 @@ static void diconnect_client(void)
 static void do_draw_fps(struct task_info *task, struct video_buffer *buffer)
 {
 	char str[256];
-	sprintf(str, "TensorRT  %d %.2f FPS", video_fps, send_fps);
+	int n = 0;
+
+	n += sprintf(str + n, "TensorRT FPS: %d", video_fps);
+#if 0
+	n += sprintf(str + n, " %.2f", send_fps);
+#endif
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
             cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255, 255, 255, 255), 3); // mat, text, coord, font, scale, bgr color, line thickness
     cv::putText(*buffer->origin_cpu, str, cv::Point(0, 20),
@@ -996,6 +1020,10 @@ int camera_face_recognition(int argc, char *argv[])
             return -1;
         }
     }
+
+	assert(buf_img_size);
+
+	video_buffer_alloc(ring_buffer, buf_img_size);
 
     mtcnn finder(imgHeight, imgWidth);              // build OR deserialize TensorRT detection network
 
