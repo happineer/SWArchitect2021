@@ -94,4 +94,8 @@ public class UiModel {
         }
         return result;
     }
+
+    public long getElapsedTime() {
+        return System.currentTimeMillis() - startTime.get();
+    }
 }

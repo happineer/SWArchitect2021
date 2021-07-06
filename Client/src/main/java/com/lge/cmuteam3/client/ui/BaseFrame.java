@@ -154,7 +154,7 @@ public class BaseFrame extends JFrame {
 
 		EventQueue.invokeLater(() -> {
 			ChartPanel panel = new ChartPanel(chart);
-			panel.setPreferredSize(new Dimension(700, 230));
+			panel.setPreferredSize(new Dimension(600, 230));
 
 			jitterPanel.removeAll();
 			jitterPanel.add(panel);
