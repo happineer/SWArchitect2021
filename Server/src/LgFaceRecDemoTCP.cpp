@@ -33,6 +33,9 @@
 #include "cudaColorspace.h"
 #include <memory>
 
+#include <sys/wait.h>
+#include <sys/types.h>
+
 
 //#define DEBUG_PRINT_ON
 #ifdef DEBUG_PRINT_ON
@@ -1222,17 +1225,32 @@ static void get_env_value(void)
 
 int main(int argc, char *argv[])
 {
+    int status;
+    int terminated_pid;
+    pid_t pid;
+
     int state = 0;
+    set_rt_policy(getpid());
+    u_ignore_sigpipe();
 
-	set_rt_policy(getpid());
+    while(1) {
+        pid = fork();
 
-	u_ignore_sigpipe();
-
-	get_env_value();
-
-    state = camera_face_recognition( argc, argv );
-
-    if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
+        if (pid < 0) {
+            printf("[Error] fork failed!\n");
+        }
+        else if (pid == 0) { // child
+            get_env_value();
+            state = camera_face_recognition( argc, argv );
+            if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
+            exit(1);
+        }
+        else { // parent
+            printf("parent process is going to wait!\n");
+            terminated_pid = wait(&status);
+            printf("terminated pid = %d\n", terminated_pid);
+        }
+    }
 
     return 0;
 }
