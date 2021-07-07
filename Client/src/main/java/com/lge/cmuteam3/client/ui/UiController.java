@@ -49,11 +49,11 @@ public class UiController {
             });
             panel.add(button);
 
-            JButton button2 = new JButton(mode.getModeName() + " stop");
-            button2.addActionListener(e -> {
-                modeManager.onUiStop(mode);
-            });
-            panel.add(button2);
+//            JButton button2 = new JButton(mode.getModeName() + " stop");
+//            button2.addActionListener(e -> {
+//                modeManager.onUiStop(mode);
+//            });
+//            panel.add(button2);
         });
     }
 
@@ -109,6 +109,7 @@ public class UiController {
     }
 
     public void runHistogramUpdater() {
+    	System.out.println("gaenoo runrun");
         future = executor.scheduleAtFixedRate(this::updateHistogram, 1000,4000, TimeUnit.MILLISECONDS);
     }
 

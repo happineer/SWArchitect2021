@@ -1,12 +1,10 @@
 package com.lge.cmuteam3.client;
 
 import com.lge.cmuteam3.client.ui.BaseFrame;
-
 import com.lge.cmuteam3.client.ui.UiController;
 import mode.ModeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.awt.EventQueue;
 
 public class TcpClientMain {
@@ -21,6 +19,7 @@ public class TcpClientMain {
             frame.setVisible(true);
 
             UiController uiController = new UiController(frame);
+            PlaybackManager.initialize(uiController);
             ModeManager modeManager = ModeManager.getInstance();
             modeManager.init(uiController);
         });

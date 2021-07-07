@@ -3,9 +3,6 @@ package com.lge.cmuteam3.client;
 import com.lge.cmuteam3.client.network.OnConnectListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.lge.cmuteam3.client.ui.BaseFrame;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.*;
@@ -18,17 +15,19 @@ import javax.imageio.ImageIO;
 
 public class Receiver extends Thread {
 	private static final Logger LOG = LoggerFactory.getLogger(Receiver.class);
-	private final Socket tcpSocket;
-
-	private int bufferSize;
-
 	private Queue<BufferedImage> queue = new LinkedList<>();
-
+	
+	private final Socket tcpSocket;
+	
+	private boolean isStart = false;
 	private boolean imageReady = false;
-
-	private transient boolean running = false;
-
+	private transient boolean isReceiving = false;
+	
+	private int bufferSize;
+	private int bufferCount = 0;
+	
 	private OnConnectListener onConnectlistener;
+	
 
 	public Receiver(Socket socket) {
 		LOG.info("socket:" + socket);
@@ -45,41 +44,36 @@ public class Receiver extends Thread {
 			}
 			LOG.info("Receiver:Socket connected!");
 			InputStream inputStream = tcpSocket.getInputStream();
-			long init = System.currentTimeMillis();
 
-			onConnectlistener.onConnected();
+//			onConnectlistener.onConnected();
 
-			running = true;
-
-			/* Receiving loop */
-			int count = 0;
-			while (running) {
-				byte[] sizeAr = new byte[4];
-				readNBytes(inputStream, sizeAr, 0, 4);
-				int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
-				
-				// TODO: refactoring
-				doMonitor(size);
-
-				if (size == 0) {
-					continue;
+			isReceiving = true;
+			
+			// Long live thread
+			// TODO : consider Executor
+			while(true) {
+				while (isReceiving) {
+					byte[] sizeAr = new byte[4];
+					readNBytes(inputStream, sizeAr, 0, 4);
+					int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
+					// TODO: refactoring
+					doMonitor(size);
+	
+					if (size <= 0) {
+						continue;
+					}
+	
+					byte[] imageAr = new byte[size];
+					readNBytes(inputStream, imageAr, 0, size);
+					queue.add(ImageIO.read(new ByteArrayInputStream(imageAr)));
+					bufferCount++;
+					if (bufferCount >= bufferSize) {
+						imageReady = true;
+					}
+	
+					Thread.sleep(20);
 				}
-
-				byte[] imageAr = new byte[size];
-				readNBytes(inputStream, imageAr, 0, size);
-				queue.add(ImageIO.read(new ByteArrayInputStream(imageAr)));
-				long current = System.currentTimeMillis();
-				init = current;
-
-				count++;
-				if (count >= bufferSize) {
-					imageReady = true;
-				}
-
-				Thread.sleep(20);
 			}
-			running = false;
-			LOG.info("receiving stopped.");
 		} catch (ConnectException ce) {
 			LOG.error(ce.getMessage());
 			onConnectlistener.onFailed();
@@ -89,14 +83,6 @@ public class Receiver extends Thread {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		} finally {
-			try {
-				if (tcpSocket != null) {
-					tcpSocket.close();
-				}
-				running = false;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
 		}
 	}
 
@@ -136,9 +122,23 @@ public class Receiver extends Thread {
     }
 
 	public void stopSelf() {
-		this.running = false;
+		this.isReceiving = false;
 	}
 
+	public void resetBuffer() {
+		bufferCount = 0;
+		imageReady = false;
+		queue.clear();
+	}
+	
+	public void startReceive() {
+		if (!isStart) {
+			start();
+			isStart = true;
+		}
+		this.isReceiving = true;
+	}
+	
 	public void setOnConnectListener(OnConnectListener onConnectlistener) {
 		this.onConnectlistener = onConnectlistener;
 	}

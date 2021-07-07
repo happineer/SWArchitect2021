@@ -24,7 +24,7 @@ public class UiModel {
 
     public void updateImageAdded() {
         long currTime = System.currentTimeMillis();
-        startTime.compareAndExchange(0, currTime);
+        startTime.compareAndSet(0, currTime);
 
         long currCount = count.incrementAndGet();
         long prevTime = previousTime.get();
