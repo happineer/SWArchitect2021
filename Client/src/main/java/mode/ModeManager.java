@@ -1,10 +1,13 @@
 package mode;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.OnUiEventListener;
 import com.lge.cmuteam3.client.ui.UiController;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ModeManager implements OnUiEventListener {
 
@@ -25,8 +28,10 @@ public class ModeManager implements OnUiEventListener {
 
 	public void init(UiController uiController) {
 		modeList = new ArrayList<>();
-		modeList.add(new TestRunMode(uiController));
+		modeList.add(new LearnMode(uiController));
+		modeList.add(new RescanMode(uiController));
 		modeList.add(new RunMode(uiController));
+		modeList.add(new TestRunMode(uiController));
 		modeList.add(new TestAccuracyMode(uiController));
 
 		uiController.setModePanel(modeList, this);
@@ -42,8 +47,20 @@ public class ModeManager implements OnUiEventListener {
 
 	@Override
 	public void onUiStart(Mode mode) {
-		currentMode = mode;
-		mode.start();
+		if (!NetworkManager.getInstance().isReady()) {
+			NetworkManager.getInstance().init();
+			return;
+		}
+		
+//		currentMode = mode;
+		ExecutorService exec = Executors.newSingleThreadExecutor();
+		exec.submit(() -> {
+			if (currentMode != null) {
+				currentMode.stop();
+			}
+			currentMode = mode;
+			currentMode.start();
+		});
 	}
 
 	@Override

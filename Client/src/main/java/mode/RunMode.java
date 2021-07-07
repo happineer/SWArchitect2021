@@ -1,41 +1,32 @@
 package mode;
 
+import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.UiController;
 
-import java.net.Socket;
-
 public class RunMode extends BaseMode {
-	private final PlaybackManager playbackManager;
-
 	RunMode(UiController uiController) {
 		super(uiController);
-
-		playbackManager = new PlaybackManager(uiController);
 	}
 
 	@Override
 	public String getModeName() {
-		return "Run Mode";
+		return "Run";
 	}
 	
 	@Override
 	public void start() {
 		NetworkManager networkManager = NetworkManager.getInstance();
-		Socket socket = networkManager.getNanoSocket();
-		if (socket == null) {
-			appendUiLog("Run Mode failed.");
-		}
-
 		appendUiLog("Run Mode start");
-		playbackManager.play(socket);
+		PlaybackManager.getInstance().play();
+		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_RUN);
 	}
 
 	@Override
 	public void stop() {
 		appendUiLog("Run Mode stop");
-		playbackManager.stop();
+		PlaybackManager.getInstance().stop();
 	}
 
 }

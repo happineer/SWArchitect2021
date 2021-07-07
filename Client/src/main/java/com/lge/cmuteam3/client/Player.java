@@ -1,12 +1,11 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.network.OnConnectListener;
 import com.lge.cmuteam3.client.ui.UiController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.awt.image.BufferedImage;
-import java.net.Socket;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -23,6 +22,7 @@ public class Player implements OnConnectListener {
 
     private boolean running = false;
     private final UiController uiController;
+    private OnPlayListener onPlayListener;
 
     public void stop() {
         LOG.debug("Event: onUiRunModeStop");
@@ -35,11 +35,12 @@ public class Player implements OnConnectListener {
                 Player.this.receiver.stopSelf();
             }
 
-            Player.this.receiver = null;
             showLog("Disconnected!");
         } else {
             showLog("Not running!");
         }
+
+        uiController.stopHistogramUpdater();
     }
 
     private class Scheduler extends TimerTask {
@@ -47,21 +48,19 @@ public class Player implements OnConnectListener {
         @Override
         public void run() {
             BufferedImage image = receiver.getImageFrame();
+            
             if (image != null) {
-                LOG.debug("image taken. remain buffer : " + receiver.getRemainBufferSize());
-                uiController.updateImage(image);
+              uiController.updateImage(image);
+              if (onPlayListener != null) {
+              	onPlayListener.onDisplayImage(image);
+              }
             } else {
                 LOG.debug("image is not ready");
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
             }
         }
     }
-
-    public Player(Receiver receiver, UiController uiController) {
+    
+    public Player(UiController uiController) {
         this.uiController = uiController;
 
         FileProperties prop = FileProperties.getInstance();
@@ -69,28 +68,30 @@ public class Player implements OnConnectListener {
         this.serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
         this.delay = Integer.parseInt(prop.getProperty("client.delay"));
 
-        this.receiver = receiver;
+        this.receiver = NetworkManager.getInstance().getReceiver();
 
         this.uiController.updateServerInfo(serverIp, serverTransferPort);
         this.uiController.reset();
     }
 
-    public void start(Socket socket) {
-        playImages(socket);
+    public void start() {
+    	this.uiController.reset();
+    	this.receiver.resetBuffer();
+    	uiController.runHistogramUpdater();
+        playImages();
     }
 
-    private void playImages(Socket socket) {
+    private void playImages() {
         if (task != null || running) {
             showLog("Already running!");
             return;
         }
-
+        this.receiver = NetworkManager.getInstance().getReceiver();
         running = true;
         showLog("Try to connect...");
-        receiver = new Receiver(socket);
-        receiver.start();
-
         receiver.setOnConnectListener(this);
+        receiver.startReceive();
+        startReceiving();
     }
 
     private void startReceiving() {
@@ -117,7 +118,13 @@ public class Player implements OnConnectListener {
             task = null;
         }
 
+        uiController.stopHistogramUpdater();
+
         running = false;
     }
 
+    public void setOnPlayListener(OnPlayListener onPlayListener) {
+    	this.onPlayListener = onPlayListener;
+    }
+    
 }
