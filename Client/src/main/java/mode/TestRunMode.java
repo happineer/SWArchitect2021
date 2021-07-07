@@ -1,28 +1,34 @@
 package mode;
 
+import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.PlaybackManager;
-import com.lge.cmuteam3.client.ui.BaseFrame;
+import com.lge.cmuteam3.client.network.NetworkManager;
+import com.lge.cmuteam3.client.ui.UiController;
 
-public class TestRunMode implements Mode {
+public class TestRunMode extends BaseMode {
+
+	public TestRunMode(UiController uiController) {
+		super(uiController);
+	}
 
 	@Override
 	public String getModeName() {
-		return "Test Run Mode";
+		return "Test Run";
 	}
 	
 	@Override
 	public void start() {
-		// TODO : player 는 소켓을 맺어서 inputStream 대기해 놓는 것 까지는 완성해 놓고
-		//이 부분에서는 NANO 에 명령어를 전달하는 방식으로 변경
-		BaseFrame.getInstance().appendLog("Test Run Mode start");
-        PlaybackManager.getInstance().play();
+		NetworkManager networkManager = NetworkManager.getInstance();
+		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_TEST_RUN);
+		appendUiLog("Test Run Mode start");
+		PlaybackManager.getInstance().play();
 		
 	}
 
 	@Override
 	public void stop() {
-		BaseFrame.getInstance().appendLog("Test Run Mode stop");
-		
+		appendUiLog("Test Run Mode stop");
+		PlaybackManager.getInstance().stop();
 	}
 
 }

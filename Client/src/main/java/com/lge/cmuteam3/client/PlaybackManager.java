@@ -1,28 +1,37 @@
 package com.lge.cmuteam3.client;
 
+import com.lge.cmuteam3.client.ui.UiController;
+
 public class PlaybackManager {
 
-	private Player player;
-	private Receiver receiver;
 	private static PlaybackManager instance;
+	private Player player;
 	
-	private PlaybackManager() {
-		FileProperties prop = FileProperties.getInstance();
-		String serverIp = prop.getProperty("server.ip");
-		int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
-		receiver = new Receiver(serverIp, serverTransferPort);
-		player = new Player(receiver);
+	public static void initialize(UiController uiController) {
+		if (instance == null) {
+			instance = new PlaybackManager(uiController);
+		}
 	}
 	
 	public static PlaybackManager getInstance() {
-		if (instance == null) {
-			instance = new PlaybackManager();
-		}
 		return instance;
 	}
 	
+	private PlaybackManager(UiController uiController) {
+		player = new Player(uiController);
+	}
 	
 	public void play() {
 		player.start();
+	}
+
+	public void stop() {
+		if (player != null) {
+			player.stop();
+		}
+	}
+	
+	public Player getPlayer() {
+		return player;
 	}
 }
