@@ -384,8 +384,8 @@ static bool OpenMotionJpegFile(TMotionJpegFileDesc *FileDesc,char * Filename, in
 
 
     // allocate CUDA buffer for the image
-	buf_img_size = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
-	printf("[%s]: buf_img_size = %ld\n", __func__, buf_img_size);
+	//buf_img_size = (FileDesc->width * FileDesc->height*(sizeof(float4) * 8))/8;
+	//printf("[%s]: buf_img_size = %ld\n", __func__, buf_img_size);
 
     // convert from uint8 to float
 
@@ -493,9 +493,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
         printf("LOG_IMAGE LoadMJpegFrame() - invalid parameter(s)\n");
         return false;
     }
-
-	video_buffer_init(vp);
-	video_buffer_mark_time(vp);
 
 	do {
 		if (!ReadMotionJpeg(FileDesc, FileDesc->buff, imagesize)) {
@@ -683,11 +680,30 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 	}
 }
 
+bool do_capture_camera(struct task_info *task, struct video_buffer *&vp)
+{
+	float* imgOrigin = NULL;	// camera image
+
+	if (!g_camera->CaptureRGBA(&imgOrigin, 1000, true)) {
+		printf("failed to capture RGBA image from camera\n");
+		assert(0);
+		return false;
+	}
+
+	video_buffer_init(vp);
+	video_buffer_mark_time(vp);
+	//printf("[%s]: imgOrigin : %p\n", __func__, imgOrigin);
+
+	//memcpy(vp->output, imgOrigin, buf_img_size);
+	cudaRGBA32ToBGRA32((float4*)imgOrigin, (float4*)vp->output, imgWidth, imgHeight); //ADDED DP
+	//cv::Mat origin_cpu(imgHeight, imgWidth, CV_32FC4, imgOrigin);
+
+	cudaRGBA32ToRGB8((float4*)vp->output, (uchar3*)vp->rgb_gpu, imgWidth, imgHeight);
+	return true;
+}
 
 void do_capture(struct task_info *task, struct video_buffer *buffer)
 {
-	float* imgOrigin = NULL;	// camera image 
-
 	if (buffer->output == NULL) {
 		printf("[%s]: recv cmd\n", __func__);
 		struct cmd_msg msg;
@@ -702,15 +718,35 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 	if (gTcpConnectedPort == -1)
 		return;
 
+	assert(imgWidth);
+	assert(imgHeight);
+
 	if (usecamera)
     {
-        if( !g_camera->CaptureRGBA(&imgOrigin, 1000, true))
-            printf("failed to capture RGBA image from camera\n");
+		while (buffer_count > MJPEG_OUT_BUF_LOW) {
+	       	struct video_buffer *vp = video_buffer_get_current();
+			video_buffer_init(vp);
+			video_buffer_mark_time(vp);
+
+			if (!do_capture_camera(task, vp)) {
+				printf("Failed to get Camera image...\n");
+				break;
+			}
+		
+			video_buffer_mark_time(vp);
+			video_buffer_next();
+			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &vp, sizeof(vp));
+			buffer_count--;
+			printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
+			usleep(10 * 1000);
+		}
     }
     else
     {
 		while (buffer_count > MJPEG_OUT_BUF_LOW) {
 			struct video_buffer *vp = video_buffer_get_current();
+			video_buffer_init(vp);
+			video_buffer_mark_time(vp);
             if (!LoadMotionJpegFrame(&MotionJpegFd, vp)) {
 				printf("Load Failed JPEG.. Maybe EOF\n");
 				break;
@@ -1020,6 +1056,10 @@ int camera_face_recognition(int argc, char *argv[])
             return -1;
         }
     }
+
+	// allocate CUDA buffer for the image
+	buf_img_size = (imgWidth * imgHeight * (sizeof(float4) * 8)) / 8;
+	printf("[%s]: buf_img_size = %ld\n", __func__, buf_img_size);
 
 	assert(buf_img_size);
 
