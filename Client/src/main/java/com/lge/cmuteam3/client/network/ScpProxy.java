@@ -32,13 +32,12 @@ public class ScpProxy {
     public boolean createFolder(String name) {
         String targetDir = learningFolder + name;
 
-        Session session = createSession(id, serverIp, port, keyFilePath, null, password);
         try {
-            if (session != null) {
-                String command = "mkdir -p " + targetDir;
-                LOG.info("ssh command:" + command);
-                sendCommand(session, command);
-            }
+            Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+
+            String command = "mkdir -p " + targetDir;
+            LOG.info("ssh command:" + command);
+            sendCommand(session, command);
         } catch (Exception e) {
             e.printStackTrace();
             LOG.info(e.getMessage());
@@ -48,17 +47,13 @@ public class ScpProxy {
     }
 
     public boolean sendFile(File file, String targetFolder) {
-        Session session = createSession(id, serverIp, port, keyFilePath, null, password);
-
-        String targetDir = learningFolder + targetFolder;
         try {
+            Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+            String targetDir = learningFolder + targetFolder;
+
             LOG.info("path :" + file.getAbsolutePath());
             LOG.info("name :" + file.getName());
 
-            if (session == null) {
-                LOG.error("scp fail");
-                return false;
-            }
             copyLocalToRemote(session, file.getAbsolutePath(), targetDir, file.getName());
         } catch (JSchException | IOException e) {
             e.printStackTrace();
@@ -69,32 +64,26 @@ public class ScpProxy {
         return true;
     }
 
-    private Session createSession(String user, String host, int port, String keyFilePath, String keyPassword, String password) {
-        try {
-            JSch jsch = new JSch();
+    private Session createSession(String user, String host, int port, String keyFilePath, String keyPassword, String password) throws JSchException {
+        JSch jsch = new JSch();
 
-            if (keyFilePath != null) {
-                if (keyPassword != null) {
-                    jsch.addIdentity(keyFilePath, keyPassword);
-                } else {
-                    jsch.addIdentity(keyFilePath);
-                }
+        if (keyFilePath != null) {
+            if (keyPassword != null) {
+                jsch.addIdentity(keyFilePath, keyPassword);
+            } else {
+                jsch.addIdentity(keyFilePath);
             }
-
-            Properties config = new java.util.Properties();
-            config.put("StrictHostKeyChecking", "no");
-            Session session = jsch.getSession(user, host, port);
-            session.setConfig(config);
-            session.setPassword(password);
-
-            session.connect();
-
-            return session;
-        } catch (JSchException e) {
-            System.out.println(e);
-            e.printStackTrace();
-            return null;
         }
+
+        Properties config = new java.util.Properties();
+        config.put("StrictHostKeyChecking", "no");
+        Session session = jsch.getSession(user, host, port);
+        session.setConfig(config);
+        session.setPassword(password);
+
+        session.connect();
+
+        return session;
     }
 
     public void sendCommand(Session session, String command) {

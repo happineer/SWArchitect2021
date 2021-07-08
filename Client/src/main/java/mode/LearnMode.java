@@ -1,5 +1,6 @@
 package mode;
 
+import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.network.ScpProxy;
 import com.lge.cmuteam3.client.ui.LeaningModeDialog;
 import com.lge.cmuteam3.client.ui.SendProgressDialog;
@@ -81,7 +82,7 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
 
             ScpProxy scpProxy = new ScpProxy();
             if (!scpProxy.createFolder(name)) {
-                appendUiLog(name + " folder creation failed.");
+                appendUiLog("\"" + name + "\" folder creation failed. At first, check if the " + FileProperties.get("client.ssh.keyFilePath") + " file exists, and if not, run the 'ssh-keygen -m PEM' command. And check other ssh properties in 'client.properties' file.");
                 alertDialog("folder creation failed.");
                 sendProgressDialog.dispose();
                 return;
