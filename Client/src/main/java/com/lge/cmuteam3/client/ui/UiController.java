@@ -1,6 +1,7 @@
 package com.lge.cmuteam3.client.ui;
 
 import com.lge.cmuteam3.client.FileProperties;
+import com.lge.cmuteam3.client.network.NetworkUiLogManager;
 import mode.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,11 +16,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-public class UiController {
+public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     private static final Logger LOG = LoggerFactory.getLogger(UiController.class);
 
     private final BaseFrame frame;
     private final StatisticsPanel statisticsPanel;
+    private final NetworkUiLogManager networkUiLogManager;
 
     private UiModel uiModel = new UiModel();
     private final ScheduledExecutorService executor;
@@ -36,6 +38,9 @@ public class UiController {
         String serverIp = prop.getProperty("server.ip");
         int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
         updateServerInfo(serverIp, serverTransferPort);
+
+        networkUiLogManager = NetworkUiLogManager.getInstance();
+        networkUiLogManager.setOnLogAddedListener(this);
     }
 
     public void setModePanel(List<Mode> modeList, OnUiEventListener modeManager) {
@@ -45,6 +50,7 @@ public class UiController {
         modeList.forEach((mode) -> {
             JButton button = new JButton(mode.getModeName() + " start");
             button.addActionListener(e -> {
+                LOG.info("Button clicked :" + mode .getModeName());
                 modeManager.onUiStart(mode);
             });
             panel.add(button);
@@ -62,8 +68,12 @@ public class UiController {
     }
 
     public void appendLog(String message) {
+        appendLog(System.currentTimeMillis(), message);
+    }
+
+    public void appendLog(long time, String message) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
-        String currentTime = dateFormat.format(new Date());
+        String currentTime = dateFormat.format(new Date(time));
 
         frame.appendLog(currentTime, message);
     }
@@ -117,5 +127,10 @@ public class UiController {
         if (future != null) {
             future.cancel(true);
         }
+    }
+
+    @Override
+    public void OnLogAdded(long time, String msg) {
+        appendLog(time, msg);
     }
 }
