@@ -1,34 +1,75 @@
-package com.lge.cmuteam3.client;
+package com.lge.cmuteam3.client.network;
 
 import com.jcraft.jsch.*;
+import com.lge.cmuteam3.client.FileProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.Properties;
 
-public class ScpTest {
-    private static final Logger LOG = LoggerFactory.getLogger(ScpTest.class);
+public class ScpProxy {
+    private static final Logger LOG = LoggerFactory.getLogger(ScpProxy.class);
 
-    void testScp() {
-        String keyFilePath = "~/.ssh/id_rsa";
-        String keyPassword = null;
+    private final String learningFolder;
+    private final String keyFilePath;
+    private final String password;
+    private final String id;
+    private final String serverIp;
+    private final int port;
 
-        Session session = createSession("donghoon.lee", "192.168.0.100", 22, keyFilePath, keyPassword);
+    public ScpProxy() {
+        FileProperties fileProperties = FileProperties.getInstance();
+        keyFilePath = fileProperties.getProperty("client.ssh.keyFilePath");
+        id = fileProperties.getProperty("server.ssh.id");
+        password = fileProperties.getProperty("server.ssh.password");
+        serverIp = fileProperties.getProperty("server.ip");
+        port = Integer.parseInt(fileProperties.getProperty("server.ssh.port"));
+        learningFolder = fileProperties.getProperty("server.ssh.learningFolder");
 
-        try {
-            if (session == null) {
-                LOG.error("scp fail");
-                return;
-            }
-            copyLocalToRemote(session,  "C:\\doker_volume\\result\\unknowns\\", "/home/donghoon.lee/images/","20210630_041951.081-0.png");
-        } catch (JSchException | IOException e) {
-            e.printStackTrace();
-        }
     }
 
+    public boolean createFolder(String name) {
+        String targetDir = learningFolder + name;
 
-    private static Session createSession(String user, String host, int port, String keyFilePath, String keyPassword) {
+        Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+        try {
+            if (session != null) {
+                String command = "mkdir -p " + targetDir;
+                LOG.info("ssh command:" + command);
+                sendCommand(session, command);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.info(e.getMessage());
+            return false;
+        }
+        return true;
+    }
+
+    public boolean sendFile(File file, String targetFolder) {
+        Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+
+        String targetDir = learningFolder + targetFolder;
+        try {
+            LOG.info("path :" + file.getAbsolutePath());
+            LOG.info("name :" + file.getName());
+
+            if (session == null) {
+                LOG.error("scp fail");
+                return false;
+            }
+            copyLocalToRemote(session, file.getAbsolutePath(), targetDir, file.getName());
+        } catch (JSchException | IOException e) {
+            e.printStackTrace();
+            LOG.error("sendFile error:" + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    private Session createSession(String user, String host, int port, String keyFilePath, String keyPassword, String password) {
         try {
             JSch jsch = new JSch();
 
@@ -44,7 +85,7 @@ public class ScpTest {
             config.put("StrictHostKeyChecking", "no");
             Session session = jsch.getSession(user, host, port);
             session.setConfig(config);
-            session.setPassword("lge123");
+            session.setPassword(password);
 
             session.connect();
 
@@ -56,9 +97,35 @@ public class ScpTest {
         }
     }
 
-    private static void copyLocalToRemote(Session session, String from, String to, String fileName) throws JSchException, IOException {
+    public void sendCommand(Session session, String command) {
+        ChannelExec channel = null;
+
+        try {
+            channel = (ChannelExec) session.openChannel("exec");
+            channel.setCommand(command);
+            ByteArrayOutputStream responseStream = new ByteArrayOutputStream();
+            channel.setOutputStream(responseStream);
+            channel.connect();
+
+            while (channel.isConnected()) {
+                Thread.sleep(100);
+            }
+
+            String responseString = responseStream.toString();
+            LOG.info("ssh response:" + responseString);
+        } catch (JSchException e) {
+            LOG.warn("ssh exception:" + e.getMessage());
+        } catch (InterruptedException e) {
+            LOG.info("wait interrupted");
+        } finally {
+            if (channel != null) {
+                channel.disconnect();
+            }
+        }
+    }
+
+    private void copyLocalToRemote(Session session, String from, String to, String fileName) throws JSchException, IOException {
         boolean ptimestamp = true;
-        from = from + File.separator + fileName;
 
         // exec 'scp -t rfile' remotely
         String command = "scp " + (ptimestamp ? "-p" : "") + " -t " + to;
@@ -91,16 +158,11 @@ public class ScpTest {
             }
         }
 
-        // send "C0644 filesize filename", where filename should not include '/'
-        long filesize = _lfile.length();
-        command = "C0644 " + filesize + " ";
+        // send "C0644 fileSize filename", where filename should not include '/'
+        long fileSize = _lfile.length();
+        command = "C0644 " + fileSize + " ";
         LOG.info("from:" + from);
 
-//        if (from.lastIndexOf('/') > 0) {
-//            command += from.substring(from.lastIndexOf('/') + 1);
-//        } else {
-//            command += from;
-//        }
         command += fileName;
 
         LOG.info("command:" + command);
@@ -131,18 +193,13 @@ public class ScpTest {
             System.exit(0);
         }
         out.close();
-
-        try {
-            if (fis != null) fis.close();
-        } catch (Exception ex) {
-            System.out.println(ex);
-        }
+        fis.close();
 
         channel.disconnect();
         session.disconnect();
     }
 
-    public static int checkAck(InputStream in) throws IOException {
+    public int checkAck(InputStream in) throws IOException {
         int b = in.read();
         // b may be 0 for success,
         //          1 for error,

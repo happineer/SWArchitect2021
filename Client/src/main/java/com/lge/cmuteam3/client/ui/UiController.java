@@ -133,4 +133,8 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     public void OnLogAdded(long time, String msg) {
         appendLog(time, msg);
     }
+
+    public BaseFrame getMainFrame() {
+        return frame;
+    }
 }

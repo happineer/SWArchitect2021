@@ -47,17 +47,19 @@ public class ModeManager implements OnUiEventListener {
 
 	@Override
 	public void onUiStart(Mode mode) {
-		if (!NetworkManager.getInstance().isReady()) {
-			NetworkManager.getInstance().init();
-			return;
-		}
-		
-//		currentMode = mode;
 		ExecutorService exec = Executors.newSingleThreadExecutor();
 		exec.submit(() -> {
 			if (currentMode != null) {
 				currentMode.stop();
 			}
+
+			if (mode.needTransferSocket()) {
+				if (!NetworkManager.getInstance().isReady()) {
+					NetworkManager.getInstance().init();
+					return;
+				}
+			}
+
 			currentMode = mode;
 			currentMode.start();
 		});
