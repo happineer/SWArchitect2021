@@ -11,6 +11,10 @@ public abstract class BaseMode implements Mode {
         this.uiController = uiController;
     }
 
+    public UiController getUiController() {
+        return uiController;
+    }
+
     void appendUiLog(String message) {
         EventQueue.invokeLater(() -> {
             uiController.appendLog(message);
@@ -30,5 +34,10 @@ public abstract class BaseMode implements Mode {
      */
     void setUiLog(String message) {
         uiController.clearLog();
+    }
+
+    @Override
+    public boolean needTransferSocket() {
+        return true;
     }
 }

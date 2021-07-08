@@ -5,7 +5,9 @@ import com.lge.cmuteam3.client.ui.UiController;
 import mode.ModeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.awt.EventQueue;
+import java.util.concurrent.Executors;
 
 public class TcpClientMain {
     // Slf4j + logback applied.
@@ -19,7 +21,11 @@ public class TcpClientMain {
             frame.setVisible(true);
 
             UiController uiController = new UiController(frame);
-            PlaybackManager.initialize(uiController);
+
+            Executors.newSingleThreadExecutor().submit(() ->
+                    PlaybackManager.initialize(uiController)
+            );
+
             ModeManager modeManager = ModeManager.getInstance();
             modeManager.init(uiController);
         });

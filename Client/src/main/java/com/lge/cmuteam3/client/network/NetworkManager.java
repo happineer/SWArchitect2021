@@ -3,6 +3,7 @@ package com.lge.cmuteam3.client.network;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+
 import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.Receiver;
 
@@ -17,7 +18,7 @@ public class NetworkManager {
 	ConnectionMonitor connectionMonitor;
 	Receiver receiver;
 	boolean isReady = false;
-	
+
 	private static NetworkManager instance;
 	private NetworkManager() {}
 	public static NetworkManager getInstance() {
@@ -44,13 +45,18 @@ public class NetworkManager {
 		int controlPort = Integer.parseInt(prop.getProperty("server.control.port"));
 
 		try {
-			LOG.info("ip:" + serverIp + " port:" + serverTransferPort);
+			String serverInfo = serverIp + ":" + serverTransferPort;
+			LOG.info(serverInfo);
+			NetworkUiLogManager.append("Try to connect : " + serverInfo);
+
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			receiver = new Receiver(nanoSocket);
 			connectionMonitor = new ConnectionMonitor(serverIp, controlPort);
 			isReady = true;
 		} catch (Exception e) {
-			LOG.info("Connection failed!!!!"+e.getMessage());
+			String msg = "Connection failed! : [" + e.getMessage() + "]";
+			LOG.info(msg);
+			NetworkUiLogManager.append(msg);
 			isReady = false;
 		}
 	}
