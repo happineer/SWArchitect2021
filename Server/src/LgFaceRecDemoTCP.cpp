@@ -740,7 +740,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 			video_buffer_next();
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &vp, sizeof(vp));
 			buffer_count--;
-			printf("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
+			DEBUG("[%s] write next ipc [0] = %d, buffer_count : %d\n", __func__, nwritten, buffer_count);
 			usleep(10 * 1000);
 		}
     }
