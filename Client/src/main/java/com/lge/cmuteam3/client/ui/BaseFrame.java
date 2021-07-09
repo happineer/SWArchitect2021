@@ -114,6 +114,15 @@ public class BaseFrame extends JFrame {
 				onCancel();
 			}
 		}, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosed(WindowEvent e) {
+				super.windowClosed(e);
+				LOG.info("windowClosed, exit app");
+				System.exit(0);
+			}
+		});
 	}
 
 	private void onCancel() {
