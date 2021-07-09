@@ -108,11 +108,6 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
         });
     }
 
-    private void alertDialog(String message) {
-        JFrame frame = getUiController().getMainFrame();
-        JOptionPane.showMessageDialog(frame, message);
-    }
-
     static class ImageFilter extends FileFilter {
         public final static String JPEG = "jpeg";
         public final static String JPG = "jpg";

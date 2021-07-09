@@ -17,6 +17,7 @@ public class ScpProxy {
     private final String id;
     private final String serverIp;
     private final int port;
+    private final String rescanScript;
 
     public ScpProxy() {
         FileProperties fileProperties = FileProperties.getInstance();
@@ -26,7 +27,7 @@ public class ScpProxy {
         serverIp = fileProperties.getProperty("server.ip");
         port = Integer.parseInt(fileProperties.getProperty("server.ssh.port"));
         learningFolder = fileProperties.getProperty("server.ssh.learningFolder");
-
+        rescanScript = fileProperties.getProperty("server.ssh.rescanScript");
     }
 
     public boolean createFolder(String name) {
@@ -45,6 +46,21 @@ public class ScpProxy {
         }
         return true;
     }
+
+    public boolean rescan() {
+        try {
+            Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+
+            LOG.info("ssh command:" + rescanScript);
+            sendCommand(session, rescanScript);
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.info(e.getMessage());
+            return false;
+        }
+        return true;
+    }
+
 
     public boolean sendFile(File file, String targetFolder) {
         try {
