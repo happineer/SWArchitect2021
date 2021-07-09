@@ -18,6 +18,7 @@ class ArtifactManager:
 
     def show_artifact_list(self):
         artifact_list = self.get_list()
+        artifact_list.sort()
 
         print("[Artifact List]")
         for n, artifact in enumerate(artifact_list, 1):
@@ -65,9 +66,9 @@ def script_title():
 #print(figlet_format('CMU-Team3', font='cybermedium'))
 #print(figlet_format('CMU-Team3', font='doom'))
 
-def mk_symlink():
-    if not os.path.isfile("friends_1280x720_12fps.smjpeg"):
-        symlink_cmd = "ln -s ~lg/artifacts/sample_video/friends_1280x720_12fps.smjpeg friends_1280x720_12fps.smjpeg"
+def mk_symlink(video_filename):
+    if not os.path.isfile(video_filename):
+        symlink_cmd = "ln -s ~lg/artifacts/sample_video/{f_name} {f_name}".format(f_name=video_filename)
         os.system(symlink_cmd)
 
 def main():
@@ -75,6 +76,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cmd', '-c', required=True, default=[], choices=['clear', 'provision', 'list'], help='a command list')
     parser.add_argument('--artifact-version', '-v', required=False, default=None, help='artifact version')
+    parser.add_argument('--video-file', '-f', required=False, default="friends_960x540_98_12fps.smjpeg", help='video filename')
     opt = parser.parse_args()
 
     artifact_mgr = ArtifactManager()
@@ -94,7 +96,7 @@ def main():
         show_summary("* Command: show the list of artifacts that support")
         artifact_mgr.show_artifact_list()
 
-    mk_symlink()
+    mk_symlink(opt.video_file)
 
 if __name__ == "__main__":
     main()
