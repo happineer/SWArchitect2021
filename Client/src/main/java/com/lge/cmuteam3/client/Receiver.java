@@ -1,6 +1,7 @@
 package com.lge.cmuteam3.client;
 
 import com.lge.cmuteam3.client.network.OnConnectListener;
+import com.lge.cmuteam3.client.network.PlaybackMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.ByteArrayInputStream;
@@ -27,6 +28,7 @@ public class Receiver extends Thread {
 	private int bufferCount = 0;
 	
 	private OnConnectListener onConnectlistener;
+	private PlaybackMonitor playbakMonitor;
 	
 
 	public Receiver(Socket socket) {
@@ -34,6 +36,7 @@ public class Receiver extends Thread {
 		this.tcpSocket = socket;
 		String strBufferSize = FileProperties.get("client.bufferSize");
 		this.bufferSize = Integer.parseInt(strBufferSize);
+		this.playbakMonitor = new PlaybackMonitor();
 	}
 
 	private void receiveImages() {
@@ -73,6 +76,7 @@ public class Receiver extends Thread {
 	
 					Thread.sleep(20);
 				}
+				Thread.sleep(1000);
 			}
 		} catch (ConnectException ce) {
 			LOG.error(ce.getMessage());
@@ -105,8 +109,7 @@ public class Receiver extends Thread {
 	
 	// receive과정에 문제 여부를 확인한다.
 	public void doMonitor(int size) {
-
-		LOG.info("received frame size : " + size);
+		playbakMonitor.onNewFrame(size);
 	}
 
 	// Utils Refactoring

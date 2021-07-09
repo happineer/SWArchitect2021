@@ -119,7 +119,6 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     }
 
     public void runHistogramUpdater() {
-    	System.out.println("gaenoo runrun");
         future = executor.scheduleAtFixedRate(this::updateHistogram, 1000,4000, TimeUnit.MILLISECONDS);
     }
 

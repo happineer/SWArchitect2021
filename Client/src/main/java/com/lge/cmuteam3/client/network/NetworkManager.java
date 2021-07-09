@@ -3,7 +3,6 @@ package com.lge.cmuteam3.client.network;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-
 import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.Receiver;
 
@@ -15,30 +14,25 @@ public class NetworkManager {
 
 	Socket nanoSocket;
 	Socket controllerSocket;
-	ConnectionMonitor connectionMonitor;
+	PlaybackMonitor playbackMonitor;
 	Receiver receiver;
+	OnServerStateListener onServerStateListener;
 	boolean isReady = false;
-
+	
 	private static NetworkManager instance;
 	private NetworkManager() {}
 	public static NetworkManager getInstance() {
 		if (instance == null) {
 			instance = new NetworkManager();
-			instance.init();
 		}
 		return instance;
 	}
-
-	public Socket getNanoSocket() {
-		if (isReady && nanoSocket != null && !nanoSocket.isClosed()) {
-			return nanoSocket;
-		}
-		init();
-		return nanoSocket;
-		
-	}
 	
 	public synchronized void init() {
+		if (isReady) {
+			serviceReady();
+			return;
+		}
 		FileProperties prop = FileProperties.getInstance();
 		String serverIp = prop.getProperty("server.ip");
 		int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
@@ -48,31 +42,46 @@ public class NetworkManager {
 			String serverInfo = serverIp + ":" + serverTransferPort;
 			LOG.info(serverInfo);
 			NetworkUiLogManager.append("Try to connect : " + serverInfo);
-
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			receiver = new Receiver(nanoSocket);
-			connectionMonitor = new ConnectionMonitor(serverIp, controlPort);
-			isReady = true;
+			serviceReady();
+			
 		} catch (Exception e) {
 			String msg = "Connection failed! : [" + e.getMessage() + "]";
 			LOG.info(msg);
 			NetworkUiLogManager.append(msg);
-			isReady = false;
+			serviceUnavailable(1);
 		}
 	}
-	
+
+	public void reInitialize() {
+		isReady = false;
+		init();
+	}
+
+	private void serviceReady() {
+		isReady = true;
+		if (onServerStateListener != null) {
+			onServerStateListener.onReady();
+		}
+	}
+
+	// TODO :define fail state (as simply as possible)
+	private void serviceUnavailable(int state) {
+		isReady = false;
+		if (onServerStateListener != null) {
+			onServerStateListener.onFail(state);
+		}
+	}
+
 	public boolean isReady() {
 		return isReady;
 	}
-	
+
 	public Receiver getReceiver() {
 		return receiver;
 	}
-	
-	public ConnectionMonitor getConnectionMonitor() {
-		return connectionMonitor;
-	}
-	
+
 	public void controlNano(int type, int value) {
 		try {
 			BufferedOutputStream bs = new BufferedOutputStream(nanoSocket.getOutputStream());
@@ -86,7 +95,12 @@ public class NetworkManager {
 			bs.write(0x0);
 			bs.flush();
 		} catch (IOException e) {
+			serviceUnavailable(1);
 			e.printStackTrace();
 		}
+	}
+	
+	public void setOnServerStateListener(OnServerStateListener onServerStateListener) {
+		this.onServerStateListener = onServerStateListener;
 	}
 }

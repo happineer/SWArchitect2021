@@ -76,7 +76,6 @@ public class Player implements OnConnectListener {
 
     public void start() {
     	this.uiController.reset();
-    	this.receiver.resetBuffer();
     	uiController.runHistogramUpdater();
         playImages();
     }
@@ -87,11 +86,16 @@ public class Player implements OnConnectListener {
             return;
         }
         this.receiver = NetworkManager.getInstance().getReceiver();
-        running = true;
+        if (receiver == null) {
+            showLog("Check Network connection...");
+            return;
+        }
         showLog("Try to connect...");
+        receiver.resetBuffer();
         receiver.setOnConnectListener(this);
         receiver.startReceive();
         startReceiving();
+        running = true;
     }
 
     private void startReceiving() {
