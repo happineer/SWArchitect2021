@@ -92,5 +92,6 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 	@Override
 	public void onFail(int serverState) {
 		uiController.appendLog("NANO Failed : " + serverState);
+		onUiStop(currentMode);
 	}
 }

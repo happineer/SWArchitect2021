@@ -26,9 +26,6 @@ public class InitMode extends BaseMode {
 	}
 
 	@Override
-	public void stop() {
-		appendUiLog("Init Mode stop");
-		PlaybackManager.getInstance().stop();
-	}
+	public void stop() {}
 
 }
