@@ -44,10 +44,14 @@
 	#define DEBUG(fmt, args...)
 #endif
 
+
+#define VIDEO_WIDTH			960
+#define VIDEO_HEIGHT		540
+
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
 static bool usecamera = false;
-static int face_detect_max = 1000;
+static int face_detect_max = 5;
 static int face_detect_acc_test_mode;
 
 static char *video_path;
@@ -540,8 +544,8 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 
 
 // create high performace jetson camera - loads the image directly to gpu memory or shared memory
-gstCamera* getCamera(){
-    gstCamera* camera = gstCamera::Create(gstCamera::DefaultWidth, gstCamera::DefaultHeight, NULL);
+gstCamera* getCamera(int width, int height){
+    gstCamera* camera = gstCamera::Create(width/*gstCamera::DefaultWidth*/, height/*gstCamera::DefaultHeight*/, NULL);
     if( !camera ){
         printf("\nfailed to initialize camera device\n");
     }else{
@@ -1036,29 +1040,43 @@ int camera_face_recognition(int argc, char *argv[])
 	else
 		video_path = argv[2];
 
+	if (video_path) {
+        if (!OpenMotionJpegFile(&MotionJpegFd, video_path, &imgWidth, &imgHeight))
+        {
+            printf("ERROR! Unable to open file %s\n",video_path);
+            return -1;
+        }
+	}
+
+	int width = VIDEO_WIDTH, height = VIDEO_HEIGHT;
     if (usecamera)
     {
-        printf("video\n");
-
-        g_camera = getCamera();                // create jetson camera - PiCamera. USB-Cam needs different operations in Loop!! not implemented!
+        printf("camera\n");
+		if (imgWidth) {
+			width = imgWidth;
+			height = imgHeight;
+		}
+        g_camera = getCamera(width, height);  // create jetson camera - PiCamera. USB-Cam needs different operations in Loop!! not implemented!
 
         if( !g_camera )    
         {
             printf("load camera failed\n");
             return -1;
         }
+        width = g_camera->GetWidth();
+        height = g_camera->GetHeight();
+    }
 
-        imgWidth = g_camera->GetWidth();
-        imgHeight = g_camera->GetHeight();
-    }
-    else
-    {
-        if (!OpenMotionJpegFile(&MotionJpegFd, video_path, &imgWidth, &imgHeight))
-        {
-            printf("ERROR! Unable to open file %s\n",video_path);
-            return -1;
-        }
-    }
+	printf("[%s]: Video  Width = %d Height = %d\n", __func__, imgWidth, imgHeight);
+	printf("[%s]: Camera Width = %d Height = %d\n", __func__, width, height);
+	if (video_path && usecamera) {
+		assert(imgWidth == width);
+		assert(imgHeight == height);
+	}
+	if (usecamera) {
+		imgWidth = width;
+		imgHeight = height;
+	}
 
 	// allocate CUDA buffer for the image
 	buf_img_size = (imgWidth * imgHeight * (sizeof(float4) * 8)) / 8;
