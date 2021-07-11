@@ -50,9 +50,16 @@
 
 static int config_face_detection = 1;
 static int config_face_recognition = 1;
-static bool usecamera = false;
+static bool usecamera = true;
 static int face_detect_max = 5;
 static int face_detect_acc_test_mode;
+static int face_detect_measure;
+enum INPUT_MODE {
+	INPUT_CAMERA = 0,
+	INPUT_FILE = 1,
+};
+
+static int input_mode = INPUT_CAMERA;
 
 static char *video_path;
 
@@ -669,15 +676,21 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 
 	case CMD_RUN_MODE:
 		printf("[%s]: CMD_RUN_MODE\n", __func__);
+		input_mode = INPUT_CAMERA;
+		printf("INPUT MODE : %s\n", (input_mode == INPUT_CAMERA) ? "INPUT_CAMERA" : "INPUT_FILE");
 		break;
 
 	case CMD_TEST_RUN_MODE:
 		printf("[%s]: CMD_TEST_RUN_MODE\n", __func__);
 		RewindMotionJpegFile(&MotionJpegFd);
+		input_mode = INPUT_FILE;
+		printf("INPUT MODE : %s\n", (input_mode == INPUT_CAMERA) ? "INPUT_CAMERA" : "INPUT_FILE");
 		break;
 
 	case CMD_TEST_ACC:
 		printf("[%s]: CMD_TEST_ACC\n", __func__);
+		input_mode = INPUT_FILE;
+		printf("INPUT MODE : %s\n", (input_mode == INPUT_CAMERA) ? "INPUT_CAMERA" : "INPUT_FILE");
 		RewindMotionJpegFile(&MotionJpegFd);
 		face_detect_acc_test_mode = 1;
 		break;
@@ -718,7 +731,8 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 		handle_cmd_msg(&msg);
 	}
 	else {
-		compute_duration(buffer);
+		if (face_detect_measure)
+			compute_duration(buffer);
 		buffer_count++;
 	}
 
@@ -728,7 +742,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 	assert(imgWidth);
 	assert(imgHeight);
 
-	if (usecamera)
+	if (input_mode == INPUT_CAMERA)
     {
 		while (buffer_count > MJPEG_OUT_BUF_LOW) {
 	       	struct video_buffer *vp = video_buffer_get_current();
@@ -1035,9 +1049,7 @@ int camera_face_recognition(int argc, char *argv[])
 
     listen_port =atoi(argv[1]);
 
-    if (argc==2)
-		usecamera = true;
-	else
+   	if (argc == 3)
 		video_path = argv[2];
 
 	if (video_path) {

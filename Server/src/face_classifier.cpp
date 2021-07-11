@@ -1,8 +1,13 @@
 //Author : Daniel595
 
 #include "face_classifier.h"   
-   
 
+//#define DEBUG_PRINT_ON
+#ifdef DEBUG_PRINT_ON
+	#define DEBUG(fmt, args...)		fprintf(stdout, "[FACE]: " fmt, ## args)
+#else
+	#define DEBUG(fmt, args...)
+#endif
 
     
 face_classifier::face_classifier(face_embedder *embedder){
@@ -182,9 +187,9 @@ void face_classifier::prediction(   std::vector<sample_type_embedding> *face_emb
                     label = (max >= mean_threshold ? i : label);    // set label
                 }
             }
-            printf("class: %d:\tmean: %f\tvotes: %d\n\t\tsumm: %f\n", i, mean, votes[i],summed[i]);
+            DEBUG("class: %d:\tmean: %f\tvotes: %d\n\t\tsumm: %f\n", i, mean, votes[i],summed[i]);
         }
-        printf("label: %f\n\n",label);
+        DEBUG("label: %f\n\n",label);
         //printf("-1 votes: %d\n", this->num_classifiers - num_votes);
 
         face_labels->push_back(label);
