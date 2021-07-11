@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
-import java.io.File;
 
 public class SendProgressDialog extends JDialog {
     private static final Logger LOG = LoggerFactory.getLogger(SendProgressDialog.class);

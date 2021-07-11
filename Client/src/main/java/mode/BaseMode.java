@@ -2,6 +2,7 @@ package mode;
 
 import com.lge.cmuteam3.client.ui.UiController;
 
+import javax.swing.*;
 import java.awt.*;
 
 public abstract class BaseMode implements Mode {
@@ -39,5 +40,10 @@ public abstract class BaseMode implements Mode {
     @Override
     public boolean needTransferSocket() {
         return true;
+    }
+
+    protected void alertDialog(String message) {
+        JFrame frame = getUiController().getMainFrame();
+        JOptionPane.showMessageDialog(frame, message);
     }
 }

@@ -53,7 +53,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 	@Override
 	public void onUiStart(Mode mode) {
 		// !(mode instanceof InitMode) init mode 는 별도의 모드가 아닌 내부 기능으로 분류될 수 있음. 
-		if (!NetworkManager.getInstance().isReady() && !(mode instanceof InitMode)) {
+		if (mode.needTransferSocket() && !NetworkManager.getInstance().isReady()) {
 			uiController.appendLog("NANO NOT READY. PRESS INIT");
 			return;
 		}
@@ -63,13 +63,6 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 			if (currentMode != null) {
 				currentMode.stop();
 			}
-
-//			if (mode.needTransferSocket()) {
-//				if (!NetworkManager.getInstance().isReady()) {
-//					NetworkManager.getInstance().init();
-//					return;
-//				}
-//			}
 
 			currentMode = mode;
 			currentMode.start();

@@ -1,6 +1,5 @@
 package mode;
 
-import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.UiController;
 
@@ -28,4 +27,8 @@ public class InitMode extends BaseMode {
 	@Override
 	public void stop() {}
 
+	@Override
+	public boolean needTransferSocket() {
+		return false;
+	}
 }
