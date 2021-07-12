@@ -49,11 +49,11 @@ public class Player implements OnConnectListener {
     }
     
     private void showImage() {
-    	BufferedImage image = receiver.getImageFrame();
-        if (image != null) {
-          uiController.updateImage(image);
+    	Frame frame = receiver.getImageFrame();
+        if (frame != null) {
+          uiController.updateImage(frame);
           if (onPlayListener != null) {
-          	onPlayListener.onDisplayImage(image);
+          	onPlayListener.onDisplayImage(frame);
           }
         }
     }

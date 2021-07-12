@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import javax.imageio.ImageIO;
 import com.lge.cmuteam3.client.Constants;
+import com.lge.cmuteam3.client.Frame;
 import com.lge.cmuteam3.client.OnPlayListener;
 import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.network.NetworkManager;
@@ -48,8 +49,8 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 	}
 
 	@Override
-	public void onDisplayImage(BufferedImage image) {
-		// Test
+	public void onDisplayImage(Frame frame) {
+		BufferedImage image = frame.getFrameImage();
 		File outputfile = new File(currentPath + accuracyFolder + (accuracyTestFrame++) + ".png");
 	    try {
 			ImageIO.write(image, "png", outputfile);

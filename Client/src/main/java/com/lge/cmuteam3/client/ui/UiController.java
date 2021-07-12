@@ -2,6 +2,7 @@ package com.lge.cmuteam3.client.ui;
 
 import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.network.NetworkUiLogManager;
+import com.lge.cmuteam3.client.Frame;
 import mode.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +111,8 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
         statisticsPanel.reset();
     }
 
-    public void updateImage(BufferedImage image) {
+    public void updateImage(Frame newFrame) {
+    	BufferedImage image = newFrame.getFrameImage();
         uiModel.updateImageAdded();
 
         frame.updateImage(image);

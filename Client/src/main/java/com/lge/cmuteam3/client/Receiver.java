@@ -10,13 +10,12 @@ import java.net.*;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
-import java.awt.image.BufferedImage;
 import java.util.Queue;
 import javax.imageio.ImageIO;
 
 public class Receiver extends Thread {
 	private static final Logger LOG = LoggerFactory.getLogger(Receiver.class);
-	private Queue<BufferedImage> queue = new LinkedList<>();
+	private Queue<Frame> queue = new LinkedList<>();
 	
 	private final Socket tcpSocket;
 	
@@ -57,9 +56,14 @@ public class Receiver extends Thread {
 			while(true) {
 				while (isReceiving) {
 					byte[] sizeAr = new byte[4];
+					byte[] initialTimeAr = new byte[8];
 					readNBytes(inputStream, sizeAr, 0, 4);
+					readNBytes(inputStream, initialTimeAr, 0, 4);
+					readNBytes(inputStream, initialTimeAr, 0, 8);
 					int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
-					// TODO: refactoring
+					
+					
+					long initialTime = ByteBuffer.wrap(initialTimeAr).asLongBuffer().get();
 					doMonitor(size);
 	
 					if (size <= 0) {
@@ -68,7 +72,8 @@ public class Receiver extends Thread {
 	
 					byte[] imageAr = new byte[size];
 					readNBytes(inputStream, imageAr, 0, size);
-					queue.add(ImageIO.read(new ByteArrayInputStream(imageAr)));
+					
+					queue.add(new Frame(ImageIO.read(new ByteArrayInputStream(imageAr)), initialTime));
 					onConnectlistener.onFrameReceived();
 					bufferCount++;
 					if (bufferCount >= bufferSize) {
@@ -97,7 +102,7 @@ public class Receiver extends Thread {
 		receiveImages();
 	}
 
-	public BufferedImage getImageFrame(){
+	public Frame getImageFrame(){
 		if (imageReady) {
 			return queue.poll();
 		}
@@ -126,6 +131,7 @@ public class Receiver extends Thread {
     }
 
 	public void stopSelf() {
+		resetBuffer();
 		this.isReceiving = false;
 	}
 
