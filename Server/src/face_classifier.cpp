@@ -1,6 +1,7 @@
 //Author : Daniel595
 
 #include "face_classifier.h"   
+#include <ctime>
 
 //#define DEBUG_PRINT_ON
 #ifdef DEBUG_PRINT_ON
@@ -9,6 +10,8 @@
 	#define DEBUG(fmt, args...)
 #endif
 
+int unknown_index;
+int frame_cnt;
     
 face_classifier::face_classifier(face_embedder *embedder){
 
@@ -117,13 +120,70 @@ void face_classifier::prediction(   sample_type_embedding *face_embedding,
 
     face_embeddings.push_back(*face_embedding);
     
-    prediction(&face_embeddings, &face_labels);
+    prediction(&face_embeddings, &face_labels, NULL);
 
     *face_label = face_labels[0];
 }
 
 
+void padTo(std::string &str, const size_t num, const char paddingChar = ' ')
+{
+    if(num > str.size())
+        str.insert(0, num - str.size(), paddingChar);
+}
 
+std::string get_curr_time()
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer[80];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+    std::string time_str(buffer);
+
+    return time_str;
+}
+
+void _mkdir(string dir_path)
+{
+    //string dir_path = "/home/jonghyuck.shin/work/test_code/mkdir/new_dir";
+    if (mkdir(dir_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
+    {
+        if( errno == EEXIST ) {
+            cout << "already exists" << endl;
+        } else {
+            // something else
+            cout << "no exists" << endl;
+            std::cout << "cannot create sessionnamefolder error:" << strerror(errno) << std::endl;
+            throw std::runtime_error( strerror(errno) );
+        }
+    }
+}
+
+void save_unknown_data(string unknown_filename, string detection_time) {
+    cout << "=============================" << endl;
+    cout << "save unknown data" << endl;
+    cout << "unknown_label: " << unknown_filename << endl;
+    cout << "unknown_detection_time: " << detection_time << endl;
+    cout << "=============================" << endl;
+}
+
+void handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face) {
+    char unknown_filename_buff[100];
+    std::string unknown_index_zfill = std::to_string(unknown_index);
+    padTo(unknown_index_zfill, 10, '0');
+    string unknown_filename = "unknown-" + unknown_index_zfill + ".jpg";
+    string unknown_filename_path = "./faces/unknown/" + unknown_filename;
+    strcpy(unknown_filename_buff, unknown_filename_path.c_str());
+    save_jpeg(face, unknown_filename_buff);
+
+    std::string detection_time = get_curr_time();
+    std::cout << "detection_time(unknown): " << detection_time << std::endl;
+    save_unknown_data(unknown_filename, detection_time);
+}
 
 // prediction for multiple samples. 
 //  - Iterate over all samples  
@@ -132,9 +192,16 @@ void face_classifier::prediction(   sample_type_embedding *face_embedding,
 //  - generate a vector of labels in the same sequence as the samples (face_labels)
 //  
 void face_classifier::prediction(   std::vector<sample_type_embedding> *face_embeddings, 
-                                    std::vector<double> *face_labels){
+                                    std::vector<double> *face_labels,
+                                    std::vector<matrix<rgb_pixel>> *faces){
     static double threshold = 0.0;
     sample_type_svm sample;
+
+    // TODO: make retroactive_mode global. it comes from client command
+    bool retroactive_mode = false;
+    if (retroactive_mode) {
+        _mkdir("./faces/unknown");
+    }
 
     // iterate all embeddings
     for(int i=0; i < face_embeddings->size(); i++ ){
@@ -190,16 +257,16 @@ void face_classifier::prediction(   std::vector<sample_type_embedding> *face_emb
             DEBUG("class: %d:\tmean: %f\tvotes: %d\n\t\tsumm: %f\n", i, mean, votes[i],summed[i]);
         }
         DEBUG("label: %f\n\n",label);
+
+        frame_cnt++;
+        if (label < 0 && faces != NULL && (frame_cnt%20)==0) {
+            frame_cnt = 0;
+            handle_unknown_data(unknown_index++, faces->at(i));
+        }
         //printf("-1 votes: %d\n", this->num_classifiers - num_votes);
-
         face_labels->push_back(label);
-
     }
 }
-       
-
-
-
 
 // get training data from filesystem
 //  - check the training data location
@@ -339,7 +406,7 @@ void face_classifier::training(std::vector<sample_type_embedding> *face_embeddin
 
     // 
     int label1 = 0, label2 = 1;
-    
+
     // iterate over all trainers
     for(trainer_type &trainer : trainers) {
         std::vector<sample_type_svm> samples4pair;

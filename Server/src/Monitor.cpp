@@ -27,12 +27,16 @@ int main(int argc, char *argv[])
         else { // parent
             printf("Parent process is going to wait!\n");
             child_pid = wait(&status);
-			
     	    printf("child exit value : %d\n", WEXITSTATUS(status));
-
-            printf("-----------------------------------\n");
-            printf("[!] Child(LgFaceRecDemoTCP) is killed\n");
-            printf("[!] Child pid = %d\n", child_pid);
+            if (WEXITSTATUS(status) == 3) {
+                printf("Start to rescan\n");
+                system("./rescan.sh");
+            }
+            else {
+                printf("-----------------------------------\n");
+                printf("[DEBUG] Child(LgFaceRecDemoTCP) is killed\n");
+                printf("[DEBUG] Child(LgFaceRecDemoTCP) pid = %d\n", child_pid);
+            }
         }
     }
 
