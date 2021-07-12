@@ -1312,25 +1312,9 @@ int main(int argc, char *argv[])
     int state = 0;
     //set_rt_policy(getpid());
     u_ignore_sigpipe();
-
-    while(1) {
-        pid = fork();
-
-        if (pid < 0) {
-            printf("[Error] fork failed!\n");
-        }
-        else if (pid == 0) { // child
-            get_env_value();
-            state = camera_face_recognition( argc, argv );
-            if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
-            exit(1);
-        }
-        else { // parent
-            printf("parent process is going to wait!\n");
-            terminated_pid = wait(&status);
-            printf("terminated pid = %d\n", terminated_pid);
-        }
-    }
+    get_env_value();
+    state = camera_face_recognition( argc, argv );
+    if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
 
     return 0;
 }
