@@ -57,7 +57,7 @@ static int face_detect_max = 5;
 static int face_detect_acc_test_mode;
 static int face_detect_measure;
 static int face_detect_autostart;
-static int face_detect_send_timestamp = 0;
+static int face_detect_send_timestamp = 1;
 
 enum INPUT_MODE {
 	INPUT_CAMERA = 0,
