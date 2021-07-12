@@ -43,6 +43,7 @@ set(CORE_SRCS
 
 # AUX_SOURCE_DIRECTORY(./src DIR_SRCS)
 cuda_add_executable( LgFaceRecDemoTCP ${CORE_SRCS} src/LgFaceRecDemoTCP.cpp)
+cuda_add_executable( Monitor src/Monitor.cpp)
 
 
 set(CMAKE_CXX_FLAGS  "-lpthread")
