@@ -16,12 +16,13 @@ public class InitMode extends BaseMode {
 	@Override
 	public void start() {
 		super.start();
+		getUiController().updateConnectionStatus("Connecting");
 		NetworkManager manager = NetworkManager.getInstance();
 		if (manager.isReady()) {
 			appendUiLog("Already Initialized");
 			return;
 		}
-		NetworkManager.getInstance().init();
+		NetworkManager.getInstance().initialize();
 	}
 
 	@Override
@@ -31,6 +32,6 @@ public class InitMode extends BaseMode {
 
 	@Override
 	public RunningButtonMode getRunningButtonMode() {
-		return RunningButtonMode.DISABLE_ALL;
+		return RunningButtonMode.ENABLE_ALL;
 	}
 }

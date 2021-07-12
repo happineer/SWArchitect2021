@@ -27,17 +27,22 @@ public class BaseFrame extends JFrame {
 	private JScrollPane scrollPane;
 
 	private JLabel labelServer;
+	private JLabel labelConnection;
 	private JTextField serverAddressTextField;
+	private JTextField ConnectionStatusTextField;
 
 	private StatisticsPanel statisticsPanel;
 	private JPanel bottomPanel;
 	private JPanel jitterPanel;
 
-	public JPanel getTopPanel() {
-		return topPanel;
+	public JPanel getModePanel() {
+		return modePanel;
 	}
 
 	private final JPanel topPanel;
+	private final JPanel statusPanel;
+	private final JPanel modePanel;
+	
 	private JPanel chartPanel;
 
 	public JLabel getImageView() {
@@ -48,6 +53,10 @@ public class BaseFrame extends JFrame {
 		return logArea;
 	}
 
+	public JTextField getConnectionStatusTextField() {
+		return ConnectionStatusTextField;
+	}
+	
 	public JTextField getServerAddressTextField() {
 		return serverAddressTextField;
 	}
@@ -69,15 +78,29 @@ public class BaseFrame extends JFrame {
 		imageView.setSize(1280, 720);
 		contentPane.add(imageView, BorderLayout.CENTER);
 
-
 		topPanel = new JPanel();
 		contentPane.add(topPanel, BorderLayout.NORTH);
+		topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+		
+		statusPanel = new JPanel();
+		topPanel.add(statusPanel, BorderLayout.NORTH);
+		modePanel = new JPanel();
+		topPanel.add(modePanel, BorderLayout.NORTH);
 
-		labelServer = new JLabel("Target Server");
-		topPanel.add(labelServer);
+		labelConnection = new JLabel("Server connection");
+		statusPanel.add(labelConnection);
+		
+		ConnectionStatusTextField = new JTextField();
+		statusPanel.add(ConnectionStatusTextField);
+		ConnectionStatusTextField.setColumns(12);
+		ConnectionStatusTextField.setEditable(false);
+		
+		
+		labelServer = new JLabel("Target Server");		
+		statusPanel.add(labelServer);
 
 		serverAddressTextField = new JTextField();
-		topPanel.add(serverAddressTextField);
+		statusPanel.add(serverAddressTextField);
 		serverAddressTextField.setColumns(12);
 		serverAddressTextField.setEditable(false);
 

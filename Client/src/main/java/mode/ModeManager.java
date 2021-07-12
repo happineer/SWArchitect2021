@@ -82,12 +82,15 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 
 	@Override
 	public void onReady() {
-		uiController.appendLog("NANO READY");
+		uiController.updateConnectionStatus("Connected");
 	}
 
 	@Override
 	public void onFail(int serverState) {
-		uiController.appendLog("NANO Failed : " + serverState);
+		if (serverState == 1)
+			uiController.updateConnectionStatus("Reconnecting...");
+		else if (serverState == 2)
+			uiController.updateConnectionStatus("Failed");
 		onUiStop(currentMode);
 	}
 }

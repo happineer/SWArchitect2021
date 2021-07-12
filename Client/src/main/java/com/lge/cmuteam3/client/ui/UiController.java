@@ -45,11 +45,11 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     }
 
     public void setModePanel(List<Mode> modeList, OnUiEventListener modeManager) {
-        JPanel panel = frame.getTopPanel();
+        JPanel panel = frame.getModePanel();
         panel.add(new JLabel("Mode"));
 
         modeList.forEach((mode) -> {
-            JButton button = new JButton(mode.getModeName() + " start");
+            ModeButton button = new ModeButton(mode);
             button.addActionListener(e -> {
                 LOG.info("Button clicked :" + mode.getModeName() + " " + mode.isRunning());
                 if (mode.isRunning()) {
@@ -68,6 +68,10 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
         });
     }
 
+    public void updateConnectionStatus(String status) {
+        this.frame.getConnectionStatusTextField().setText(status);
+    }
+    
     public void updateServerInfo(String serverIp, int serverTransferPort) {
         this.frame.getServerAddressTextField().setText(serverIp + ":" + serverTransferPort);
     }
@@ -148,14 +152,14 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
             return;
         }
 
-        JPanel topPanel = frame.getTopPanel();
+        JPanel topPanel = frame.getModePanel();
         Component[] components = topPanel.getComponents();
         for (Component component : components) {
             LOG.info("component : " + component.getName());
-            if (component instanceof JButton) {
+            if (component instanceof ModeButton) {
                 if (mode != null
                         && mode.getRunningButtonMode() == Mode.RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT
-                        && ((JButton) component).getText().contains(mode.getModeName())) {
+                        && ((ModeButton) component).getMode() == mode) {
                     ((JButton) component).setText(mode.getModeName() + " stop");
                     continue;
                 }
@@ -167,7 +171,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     public void enableAllControlButtons() {
         LOG.info("enableAllControlButtons");
 
-        JPanel topPanel = frame.getTopPanel();
+        JPanel topPanel = frame.getModePanel();
         Component[] components = topPanel.getComponents();
         for (Component component : components) {
             if (component instanceof JButton) {

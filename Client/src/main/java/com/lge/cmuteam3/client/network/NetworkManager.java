@@ -3,7 +3,11 @@ package com.lge.cmuteam3.client.network;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+
 import com.lge.cmuteam3.client.FileProperties;
+import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.Receiver;
 
 import org.slf4j.Logger;
@@ -11,15 +15,16 @@ import org.slf4j.LoggerFactory;
 
 public class NetworkManager {
 	private static final Logger LOG = LoggerFactory.getLogger(NetworkManager.class);
-
-	Socket nanoSocket;
-	Socket controllerSocket;
-	PlaybackMonitor playbackMonitor;
-	Receiver receiver;
-	OnServerStateListener onServerStateListener;
-	boolean isReady = false;
-	
 	private static NetworkManager instance;
+	
+	private Socket nanoSocket;
+	private Receiver receiver;
+	private OnServerStateListener onServerStateListener;
+	private boolean isReady = false;
+	private int retryCount = 0;
+	
+	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+	
 	private NetworkManager() {}
 	public static NetworkManager getInstance() {
 		if (instance == null) {
@@ -28,7 +33,23 @@ public class NetworkManager {
 		return instance;
 	}
 	
-	public synchronized void init() {
+	public synchronized void initialize() {
+		serviceUnavailable(1);
+		try {
+			for (int i = 0; i < 3; i++) {
+				init();
+				if (isReady) {
+					return;
+				}
+				Thread.sleep(3000);
+			}
+			serviceUnavailable(2);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void init() {
 		if (isReady) {
 			serviceReady();
 			return;
@@ -36,14 +57,15 @@ public class NetworkManager {
 		FileProperties prop = FileProperties.getInstance();
 		String serverIp = prop.getProperty("server.ip");
 		int serverTransferPort = Integer.parseInt(prop.getProperty("server.transfer.port"));
-		int controlPort = Integer.parseInt(prop.getProperty("server.control.port"));
 
 		try {
 			String serverInfo = serverIp + ":" + serverTransferPort;
 			LOG.info(serverInfo);
+			
 			NetworkUiLogManager.append("Try to connect : " + serverInfo);
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			receiver = new Receiver(nanoSocket);
+			System.out.println("gaenoo socket connect");
 			serviceReady();
 			
 		} catch (Exception e) {
@@ -56,7 +78,7 @@ public class NetworkManager {
 
 	public void reInitialize() {
 		isReady = false;
-		init();
+		initialize();
 	}
 
 	private void serviceReady() {
