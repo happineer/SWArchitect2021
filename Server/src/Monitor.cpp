@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
         else { // parent
             printf("Parent process is going to wait!\n");
             child_pid = wait(&status);
-            printf("-----------------------------------\n")
+            printf("-----------------------------------\n");
             printf("[!] Child(LgFaceRecDemoTCP) is killed\n");
             printf("[!] Child pid = %d\n", child_pid);
         }
