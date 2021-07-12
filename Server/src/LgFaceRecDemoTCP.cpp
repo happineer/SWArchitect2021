@@ -44,6 +44,8 @@
 	#define DEBUG(fmt, args...)
 #endif
 
+#define PERROR(fmt, args...)		fprintf(stderr, "[ERROR]: " fmt, ## args)
+
 
 #define VIDEO_WIDTH			960
 #define VIDEO_HEIGHT		540
@@ -349,6 +351,20 @@ static inline struct video_buffer *video_buffer_get_current(void)
 static inline void video_buffer_next(void)
 {
 	ring_index = (ring_index + 1) % MJPEG_OUT_BUF_NR;
+}
+
+static int video_buffer_flushing;
+
+static void video_buffer_do_flush(void)
+{
+	int i = 0;
+
+	video_buffer_flushing = 1;
+	while (buffer_count != MJPEG_OUT_BUF_NR) {
+		printf("[%s] waiting %d flushing... buffer_count: %d\n", __func__, i, buffer_count);
+		usleep(10 * 1000);
+	}
+	video_buffer_flushing = 0;
 }
 
 
@@ -751,6 +767,11 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 		buffer_count++;
 	}
 
+	if (video_buffer_flushing) {
+		printf("[%s]... flushing... buffer_count: %d\n", __func__, buffer_count);
+		return;
+	}
+
 	if (gTcpConnectedPort == -1)
 		return;
 
@@ -882,6 +903,9 @@ void *video_task_face_detect(void *args)
 
 		video_buffer_mark_time(buffer);
 		for (int i = 0; i < WORK_FUNC_NR; i++) {
+			if (video_buffer_flushing)
+				break;
+
 			if (task->do_work[i])
 				task->do_work[i](task, buffer);
 			else
@@ -949,7 +973,9 @@ void do_face_recognize(struct task_info *task, struct video_buffer *buffer)
 static void diconnect_client(void)
 {
 	printf("[%s] client connection error : %d : %s \n", __func__, errno, strerror(errno));
-	CloseTcpConnectedPort(gTcpConnectedPort);
+	if (gTcpConnectedPort != -1) {
+		CloseTcpConnectedPort(gTcpConnectedPort);
+	}
 	gTcpConnectedPort = -1;
 	return;
 }
@@ -981,6 +1007,7 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 	//Render captured image
 	if (face_detect_send_timestamp) {
 		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu, buffer->timestamp) < 0) {
+			PERROR("[%s]:%d TcpSendImageAsJpeg\n", __func__, __LINE__);
 			diconnect_client();
 			return;
 			assert(0);
@@ -988,6 +1015,7 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 	} else {
 		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu) < 0) {
 			diconnect_client();
+			PERROR("[%s]:%d TcpSendImageAsJpeg\n", __func__, __LINE__);
 			return;
 			assert(0);
 		}
@@ -1022,7 +1050,8 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	if (ret != sizeof(msg)) {
 		if (epoll_ctl(epollfd, EPOLL_CTL_DEL, tcpConnectedPort, NULL) == -1) {
 			perror("epoll_ctl: EPOLL_CTL_DEL conn_sock");
-			exit(EXIT_FAILURE);
+			//exit(EXIT_FAILURE);
+			PERROR("[%s]:%d EPOLL_CTL_DEL\n", __func__, __LINE__);
 		}
 		printf("[%s] epoll_ctl: EPOLL_CTL_DEL conn_sock\n", __func__);
 		diconnect_client();
@@ -1035,8 +1064,32 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 		assert(msg.type == 1);
 		return;
 	}
+	
+	switch (msg.value)
+	{
+		case CMD_PLAY_STOP:
+			printf("[%s]: CMD_PLAY_STOP\n", __func__);
+			video_buffer_do_flush();
+			break;
+	
+		case CMD_RUN_MODE:
+			printf("[%s]: CMD_RUN_MODE\n", __func__);
+			video_buffer_do_flush();
+			break;
+	
+		case CMD_TEST_RUN_MODE:
+			printf("[%s]: CMD_TEST_RUN_MODE\n", __func__);
+			video_buffer_do_flush();
+			break;
+	
+		case CMD_TEST_ACC:
+			printf("[%s]: CMD_TEST_ACC\n", __func__);
+			video_buffer_do_flush();
+			break;
+	}
 
 	if (msg.value == CMD_RESCAN) {
+		video_buffer_do_flush();
 		printf("[%s]: CMD_RESCAN\n", __func__);
 		SAFE_DELETE(g_camera);
 		exit(3);
