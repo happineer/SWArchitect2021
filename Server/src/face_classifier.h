@@ -28,7 +28,8 @@ public:
     ~face_classifier(void);
     void prediction(std::vector<sample_type_embedding> *face_embeddings, 
                     std::vector<double> *face_labels,
-                    std::vector<matrix<rgb_pixel>> *faces);
+                    std::vector<matrix<rgb_pixel>> *faces,
+                    bool retroactive_mode = false);
     void prediction(sample_type_embedding *face_embedding, 
                     double *face_label);
     void get_label_encoding(std::vector<std::string> *labels);

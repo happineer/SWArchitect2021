@@ -10,8 +10,11 @@
 	#define DEBUG(fmt, args...)
 #endif
 
+#define RETROACTIVE_CAPTURE_INTERVAL 20
+
 int unknown_index;
 int frame_cnt;
+
     
 face_classifier::face_classifier(face_embedder *embedder){
 
@@ -147,22 +150,6 @@ std::string get_curr_time()
     return time_str;
 }
 
-void _mkdir(string dir_path)
-{
-    //string dir_path = "/home/jonghyuck.shin/work/test_code/mkdir/new_dir";
-    if (mkdir(dir_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
-    {
-        if( errno == EEXIST ) {
-            cout << "already exists" << endl;
-        } else {
-            // something else
-            cout << "no exists" << endl;
-            std::cout << "cannot create sessionnamefolder error:" << strerror(errno) << std::endl;
-            throw std::runtime_error( strerror(errno) );
-        }
-    }
-}
-
 void save_unknown_data(string unknown_filename, string detection_time) {
     cout << "=============================" << endl;
     cout << "save unknown data" << endl;
@@ -193,15 +180,10 @@ void handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face) {
 //  
 void face_classifier::prediction(   std::vector<sample_type_embedding> *face_embeddings, 
                                     std::vector<double> *face_labels,
-                                    std::vector<matrix<rgb_pixel>> *faces){
+                                    std::vector<matrix<rgb_pixel>> *faces,
+                                    bool retroactive_mode){
     static double threshold = 0.0;
     sample_type_svm sample;
-
-    // TODO: make retroactive_mode global. it comes from client command
-    bool retroactive_mode = false;
-    if (retroactive_mode) {
-        _mkdir("./faces/unknown");
-    }
 
     // iterate all embeddings
     for(int i=0; i < face_embeddings->size(); i++ ){
@@ -260,7 +242,7 @@ void face_classifier::prediction(   std::vector<sample_type_embedding> *face_emb
 
         if (retroactive_mode) {
             frame_cnt++;
-            if (label < 0 && faces != NULL && (frame_cnt%20)==0) {
+            if (label < 0 && faces != NULL && (frame_cnt%RETROACTIVE_CAPTURE_INTERVAL)==0) {
                 frame_cnt = 0;
                 handle_unknown_data(unknown_index++, faces->at(i));
             }

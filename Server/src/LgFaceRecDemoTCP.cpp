@@ -59,6 +59,9 @@ static int face_detect_measure;
 static int face_detect_autostart;
 static int face_detect_send_timestamp = 1;
 
+
+static bool retroactive_mode = false;
+
 enum INPUT_MODE {
 	INPUT_CAMERA = 0,
 	INPUT_FILE = 1,
@@ -113,6 +116,7 @@ enum CMD_VALUE {
 	CMD_TEST_RUN_MODE	= 0x2,
 	CMD_TEST_ACC		= 0x3,
 	CMD_RESCAN			= 0x4,
+	CMD_RARUN_MODE		= 0x5,
 };
 
 struct video_buffer {
@@ -200,6 +204,17 @@ struct ipc ipcs[TID_NR];
 #define handle_error(msg) \
 		do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
+
+void _mkdir(string dir_path)
+{
+    //string dir_path = "/home/jonghyuck.shin/work/test_code/mkdir/new_dir";
+    if (mkdir(dir_path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1)
+    {
+        if( errno == EEXIST ) {
+            cout << "already exists" << endl;
+        }
+    }
+}
 
 int timerfd_disarm(int fd)
 {
@@ -737,6 +752,12 @@ static void handle_cmd_msg(struct cmd_msg *msg)
 		face_detect_acc_test_mode = 1;
 		break;
 
+	case CMD_RARUN_MODE:
+		printf("[%s]: CMD_RARUN_MODE\n", __func__);
+		input_mode = INPUT_CAMERA;
+		printf("INPUT MODE : %s\n", (input_mode == INPUT_CAMERA) ? "INPUT_CAMERA" : "INPUT_FILE");
+		break;
+
 	default:
 		break;
 	}
@@ -965,7 +986,7 @@ void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 	}
 
 	// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels, buffer->faces);
+	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels, buffer->faces, retroactive_mode);
 
     // draw bounding boxes and labels to the original image 
     draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
@@ -1083,6 +1104,7 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 		return;
 	}
 	
+    retroactive_mode = false;
 	switch (msg.value)
 	{
 		case CMD_PLAY_STOP:
@@ -1115,6 +1137,17 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 			usleep(1000 * 1000);
 			break;
 
+		case CMD_RARUN_MODE:
+			printf("[%s]: CMD_RARUN_MODE\n", __func__);
+            printf("rm -rf ./faces/unknown");
+            system("rm -rf ./faces/unknown");
+            _mkdir("./faces/unknown");
+            retroactive_mode = true;
+			if (g_camera)
+				return;
+			video_buffer_do_flush();
+			break;
+
 		default:
 			printf("[%s]: Unknown Command\n", __func__);
 			return;
@@ -1123,7 +1156,7 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 #ifdef ALWAYS_OPEN_CAMERA
 	// nothing...
 #else
-	if (msg.value == CMD_RUN_MODE) {
+	if (msg.value == CMD_RUN_MODE || msg.value == CMD_RARUN_MODE) {
 		if (!g_camera) {
 			g_camera = getCamera(imgWidth, imgHeight);
 			printf("[%s]: opened camera\n", __func__);
