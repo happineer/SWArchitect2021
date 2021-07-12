@@ -15,7 +15,7 @@ public class InitMode extends BaseMode {
 	
 	@Override
 	public void start() {
-		appendUiLog("Init Mode start");
+		super.start();
 		NetworkManager manager = NetworkManager.getInstance();
 		if (manager.isReady()) {
 			appendUiLog("Already Initialized");
@@ -25,10 +25,12 @@ public class InitMode extends BaseMode {
 	}
 
 	@Override
-	public void stop() {}
-
-	@Override
 	public boolean needTransferSocket() {
 		return false;
+	}
+
+	@Override
+	public RunningButtonMode getRunningButtonMode() {
+		return RunningButtonMode.DISABLE_ALL;
 	}
 }

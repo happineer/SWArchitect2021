@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -50,8 +51,12 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
         modeList.forEach((mode) -> {
             JButton button = new JButton(mode.getModeName() + " start");
             button.addActionListener(e -> {
-                LOG.info("Button clicked :" + mode .getModeName());
-                modeManager.onUiStart(mode);
+                LOG.info("Button clicked :" + mode.getModeName() + " " + mode.isRunning());
+                if (mode.isRunning()) {
+                    modeManager.onUiStop(mode);
+                } else {
+                    modeManager.onUiStart(mode);
+                }
             });
             panel.add(button);
 
@@ -135,5 +140,41 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
 
     public BaseFrame getMainFrame() {
         return frame;
+    }
+
+    public void disableControlButtons(Mode mode) {
+        LOG.info("disableControlButtons : ");
+        if (mode.getRunningButtonMode() == Mode.RunningButtonMode.ENABLE_ALL) {
+            return;
+        }
+
+        JPanel topPanel = frame.getTopPanel();
+        Component[] components = topPanel.getComponents();
+        for (Component component : components) {
+            LOG.info("component : " + component.getName());
+            if (component instanceof JButton) {
+                if (mode != null
+                        && mode.getRunningButtonMode() == Mode.RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT
+                        && ((JButton) component).getText().contains(mode.getModeName())) {
+                    ((JButton) component).setText(mode.getModeName() + " stop");
+                    continue;
+                }
+                component.setEnabled(false);
+            }
+        }
+    }
+
+    public void enableAllControlButtons() {
+        LOG.info("enableAllControlButtons");
+
+        JPanel topPanel = frame.getTopPanel();
+        Component[] components = topPanel.getComponents();
+        for (Component component : components) {
+            if (component instanceof JButton) {
+                component.setEnabled(true);
+                JButton button = (JButton) component;
+                button.setText(button.getText().replace("stop", "start"));
+            }
+        }
     }
 }

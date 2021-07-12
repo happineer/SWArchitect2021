@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RescanMode extends BaseMode {
     private static final Logger LOG = LoggerFactory.getLogger(RescanMode.class);
@@ -26,7 +26,8 @@ public class RescanMode extends BaseMode {
 
     @Override
     public void start() {
-        appendUiLog("Rescan Mode start");
+        super.start();
+
         EventQueue.invokeLater(() -> {
             LoadingDialog dialog = new LoadingDialog(getUiController().getMainFrame(), "Rescan");
             rescan(dialog);
@@ -34,11 +35,13 @@ public class RescanMode extends BaseMode {
     }
 
     private void rescan(LoadingDialog dialog) {
-        Executor executors = Executors.newSingleThreadExecutor();
-        executors.execute(() -> {
-            LOG.info("rescan!");
+        ExecutorService service = Executors.newFixedThreadPool(1);
 
-            long start = System.currentTimeMillis();
+        AtomicBoolean isCanceled = new AtomicBoolean(false);
+        long start = System.currentTimeMillis();
+        Future<String> futureResult = service.submit(() -> {
+
+            LOG.info("rescan!");
 
             ScpProxy scpProxy = new ScpProxy();
             String message = "Rescan Success.";
@@ -46,7 +49,29 @@ public class RescanMode extends BaseMode {
                 message = "Rescan failed.";
             }
 
-            disposeAndShowDialog(dialog, message, System.currentTimeMillis() - start);
+            if (!isCanceled.get())
+                disposeAndShowDialog(dialog, message, System.currentTimeMillis() - start);
+
+            return "";
+        });
+
+        Executor executors = Executors.newSingleThreadExecutor();
+        executors.execute(() -> {
+            try {
+                futureResult.get(3, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                isCanceled.set(true);
+                disposeAndShowDialog(dialog, "Rescan interrupted.", System.currentTimeMillis() - start);
+            } catch (ExecutionException e) {
+                isCanceled.set(true);
+                disposeAndShowDialog(dialog, "Rescan - Execution Exception.", System.currentTimeMillis() - start);
+            } catch (TimeoutException e) {
+                isCanceled.set(true);
+                disposeAndShowDialog(dialog, "Rescan - Timeout occurred.", System.currentTimeMillis() - start);
+            } finally {
+                service.shutdown();
+                ModeManager.getInstance().onUiStop(this);
+            }
         });
     }
 
@@ -60,12 +85,12 @@ public class RescanMode extends BaseMode {
     }
 
     @Override
-    public void stop() {
-    }
-
-    @Override
     public boolean needTransferSocket() {
         return false;
     }
 
+    @Override
+    public RunningButtonMode getRunningButtonMode() {
+        return RunningButtonMode.DISABLE_ALL;
+    }
 }

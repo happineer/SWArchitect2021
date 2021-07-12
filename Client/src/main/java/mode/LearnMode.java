@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
+import java.awt.*;
 import java.io.File;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -37,19 +38,23 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
         fileChooser.setAcceptAllFileFilterUsed(false);
         fileChooser.setMultiSelectionEnabled(true);
 
-        int option = fileChooser.showOpenDialog(frame);
-        if (option == JFileChooser.APPROVE_OPTION) {
-            File[] files = fileChooser.getSelectedFiles();
+        EventQueue.invokeLater(() -> {
+            int option = fileChooser.showOpenDialog(frame);
+            if (option == JFileChooser.APPROVE_OPTION) {
+                File[] files = fileChooser.getSelectedFiles();
 
-            LOG.info("File Selected: " + files.length);
+                LOG.info("File Selected: " + files.length);
 
-            LeaningModeDialog dialog = new LeaningModeDialog(frame, "Add images...", files, this);
-            dialog.setLocationRelativeTo(frame);
-            dialog.pack();
-            dialog.setVisible(true);
-        } else {
-            LOG.info("Open command canceled");
-        }
+                LeaningModeDialog dialog = new LeaningModeDialog(frame, "Add images...", files, this);
+                dialog.setLocationRelativeTo(frame);
+                dialog.pack();
+                dialog.setVisible(true);
+            } else {
+                LOG.info("Open command canceled");
+
+                ModeManager.getInstance().onUiStop(this);
+            }
+        });
     }
 
     @Override
@@ -105,6 +110,8 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
 
             sendProgressDialog.dispose();
             alertDialog("Sending images completed.");
+
+            ModeManager.getInstance().onUiStop(this);
         });
     }
 
@@ -149,5 +156,10 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
             }
             return ext;
         }
+    }
+
+    @Override
+    public RunningButtonMode getRunningButtonMode() {
+        return RunningButtonMode.DISABLE_ALL;
     }
 }

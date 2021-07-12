@@ -62,9 +62,11 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 		exec.submit(() -> {
 			if (currentMode != null) {
 				currentMode.stop();
+				uiController.enableAllControlButtons();
 			}
 
 			currentMode = mode;
+			uiController.disableControlButtons(currentMode);
 			currentMode.start();
 		});
 	}
@@ -73,6 +75,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 	public void onUiStop(Mode mode) {
 		if (currentMode != null) {
 			currentMode.stop();
+			uiController.enableAllControlButtons();
 		}
 		currentMode = null;
 	}
