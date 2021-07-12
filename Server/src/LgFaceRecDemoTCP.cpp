@@ -110,6 +110,7 @@ enum CMD_VALUE {
 	CMD_RUN_MODE 		= 0x1,
 	CMD_TEST_RUN_MODE	= 0x2,
 	CMD_TEST_ACC		= 0x3,
+	CMD_RESCAN			= 0x4,
 };
 
 struct video_buffer {
@@ -1030,7 +1031,18 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	assert(ret == sizeof(msg));
 
 	printf("[%s] client msg type : 0x%08X, value : 0x%08X\n", __func__, msg.type, msg.value);
-	send_cmd_msg(&msg);
+	if (msg.type != 1) {
+		assert(msg.type == 1);
+		return;
+	}
+
+	if (msg.value == CMD_RESCAN) {
+		printf("[%s]: CMD_RESCAN\n", __func__);
+		SAFE_DELETE(g_camera);
+		exit(3);
+	} else {
+		send_cmd_msg(&msg);
+	}
 }
 
 static struct task_info g_task_info[TID_NR] = {
