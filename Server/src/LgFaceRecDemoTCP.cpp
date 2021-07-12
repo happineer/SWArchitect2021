@@ -54,6 +54,8 @@ static bool usecamera = true;
 static int face_detect_max = 5;
 static int face_detect_acc_test_mode;
 static int face_detect_measure;
+static int face_detect_autostart;
+
 enum INPUT_MODE {
 	INPUT_CAMERA = 0,
 	INPUT_FILE = 1,
@@ -846,8 +848,15 @@ void *video_task_face_detect(void *args)
 	int ret;
 	while(1) {
 		ret = poll(fds, 1, 5000);
-		if (ret <= 0) {
-			printf("[%s] TID:%d PREV:%d ret = %d\n", __func__, tid, tid_prev, ret);
+		if (ret == 0) {
+			DEBUG("[%s] TID:%d PREV:%d ret = %d\n", __func__, tid, tid_prev, ret);
+			continue;
+		}
+		if (ret < 0) {
+			fprintf(stderr, "[%s] TID:%d PREV:%d ret = %d, errno: %d %s\n",
+				__func__, tid, tid_prev, ret, errno, strerror(errno));
+			assert(0);
+			usleep(1000 * 1000);
 			continue;
 		}
 
@@ -978,7 +987,7 @@ static void handle_timer(int fd)
 
 	video_fps = video_frames - old_frames;
 	old_frames = video_frames;
-	printf("[%s] video fps = %d\n", __func__, video_fps);
+	printf("[%s] video fps = %d  buffer_count = %d\n", __func__, video_fps, buffer_count);
 }
 
 static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
@@ -1195,7 +1204,8 @@ int camera_face_recognition(int argc, char *argv[])
 					perror("epoll_ctl: conn_sock");
 					exit(EXIT_FAILURE);
 				}
-				start_video_stream(gTcpConnectedPort);
+				if (face_detect_autostart)
+					start_video_stream(gTcpConnectedPort);
 			} else if (events[n].data.fd == timerfd) {
 				handle_timer(timerfd);
 			} else { // from client
@@ -1250,6 +1260,12 @@ static void get_env_value(void)
 	if (value) {
 		face_detect_max = strtol(value, NULL, 0);
 		printf("[%s] FACE_DETECT_MAX face_detect_max = %d\n", __func__, face_detect_max);
+	}
+
+	value = getenv("FACE_DETECT_AUTOSTART");
+	if (value) {
+		face_detect_autostart = strtol(value, NULL, 0);
+		printf("[%s] FACE_DETECT_AUTOSTART face_detect_autostart = %d\n", __func__, face_detect_autostart);
 	}
 }
 
