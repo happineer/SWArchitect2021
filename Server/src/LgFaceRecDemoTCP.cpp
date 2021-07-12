@@ -1276,7 +1276,7 @@ int main(int argc, char *argv[])
     pid_t pid;
 
     int state = 0;
-    set_rt_policy(getpid());
+    //set_rt_policy(getpid());
     u_ignore_sigpipe();
 
     while(1) {
