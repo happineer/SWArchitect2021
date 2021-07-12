@@ -21,6 +21,7 @@ public class Player implements OnConnectListener {
     private TimerTask task;
 
     private boolean running = false;
+    private boolean directPlay = false;
     private final UiController uiController;
     private OnPlayListener onPlayListener;
 
@@ -34,10 +35,6 @@ public class Player implements OnConnectListener {
             if (Player.this.receiver != null) {
                 Player.this.receiver.stopSelf();
             }
-
-            showLog("Disconnected!");
-        } else {
-            showLog("Not running!");
         }
 
         uiController.stopHistogramUpdater();
@@ -47,16 +44,17 @@ public class Player implements OnConnectListener {
 
         @Override
         public void run() {
-            BufferedImage image = receiver.getImageFrame();
-            
-            if (image != null) {
-              uiController.updateImage(image);
-              if (onPlayListener != null) {
-              	onPlayListener.onDisplayImage(image);
-              }
-            } else {
-                LOG.debug("image is not ready");
-            }
+        	showImage();
+        }
+    }
+    
+    private void showImage() {
+    	BufferedImage image = receiver.getImageFrame();
+        if (image != null) {
+          uiController.updateImage(image);
+          if (onPlayListener != null) {
+          	onPlayListener.onDisplayImage(image);
+          }
         }
     }
     
@@ -75,22 +73,27 @@ public class Player implements OnConnectListener {
     }
 
     public void start() {
+    	directPlay = false;
     	this.uiController.reset();
     	uiController.runHistogramUpdater();
         playImages();
     }
 
+    public void startDirect() {
+    	directPlay = true;
+    	this.uiController.reset();
+    	uiController.runHistogramUpdater();
+        playImages();
+    }
+    
     private void playImages() {
         if (task != null || running) {
-            showLog("Already running!");
             return;
         }
         this.receiver = NetworkManager.getInstance().getReceiver();
         if (receiver == null) {
-            showLog("Check Network connection...");
             return;
         }
-        showLog("Try to connect...");
         receiver.resetBuffer();
         receiver.setOnConnectListener(this);
         receiver.startReceive();
@@ -116,7 +119,6 @@ public class Player implements OnConnectListener {
 
     @Override
     public void onFailed() {
-        showLog("Connection failed!");
         if (task != null) {
             task.cancel();
             task = null;
@@ -130,5 +132,13 @@ public class Player implements OnConnectListener {
     public void setOnPlayListener(OnPlayListener onPlayListener) {
     	this.onPlayListener = onPlayListener;
     }
+
+	@Override
+	public void onFrameReceived() {
+		if (!directPlay) {
+			return;
+		}
+		showImage();
+	}
     
 }

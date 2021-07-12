@@ -19,13 +19,12 @@ public class RunMode extends BaseMode {
 	public void start() {
 		NetworkManager networkManager = NetworkManager.getInstance();
 		appendUiLog("Run Mode start");
-		PlaybackManager.getInstance().play();
+		PlaybackManager.getInstance().playDirect();
 		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_RUN);
 	}
 
 	@Override
 	public void stop() {
-		appendUiLog("Run Mode stop");
 		PlaybackManager.getInstance().stop();
 	}
 

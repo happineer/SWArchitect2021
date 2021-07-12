@@ -27,7 +27,6 @@ public class TestRunMode extends BaseMode {
 
 	@Override
 	public void stop() {
-		appendUiLog("Test Run Mode stop");
 		PlaybackManager.getInstance().stop();
 	}
 

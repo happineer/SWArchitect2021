@@ -61,7 +61,6 @@ public class RescanMode extends BaseMode {
 
     @Override
     public void stop() {
-        appendUiLog("Rescan Mode stop");
     }
 
     @Override

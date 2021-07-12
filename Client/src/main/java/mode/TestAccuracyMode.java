@@ -42,13 +42,11 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 
 	@Override
 	public void stop() {
-		appendUiLog("Test Accuracy Mode stop");
 		PlaybackManager.getInstance().getPlayer().setOnPlayListener(null);
 	}
 
 	@Override
-	public void onDisplayImage(BufferedImage image) {
-		
+	public void onDisplayImage(BufferedImage image) {		
 		// Test
 		File outputfile = new File(currentPath + accuracyFolder + (accuracyTestFrame++) + ".png");
 	    try {

@@ -16,13 +16,13 @@ public class PlaybackMonitor {
 
 	public void onNewFrame(int size) {
 		if (future == null) {
-			future = executor.schedule(this::handleResult, 5, TimeUnit.SECONDS);
+			future = executor.schedule(this::handleResult, 10, TimeUnit.SECONDS);
 			return;
 		}
 		
 		if (future != null && size != 0) {
 			future.cancel(true);
-			future = executor.schedule(this::handleResult, 5, TimeUnit.SECONDS);
+			future = executor.schedule(this::handleResult, 10, TimeUnit.SECONDS);
 		}
 		
 	}

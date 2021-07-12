@@ -25,6 +25,10 @@ public class PlaybackManager {
 		player.start();
 	}
 
+	public void playDirect() {
+		player.startDirect();
+	}
+	
 	public void stop() {
 		if (player != null) {
 			player.stop();

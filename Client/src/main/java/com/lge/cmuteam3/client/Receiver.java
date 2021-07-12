@@ -69,12 +69,13 @@ public class Receiver extends Thread {
 					byte[] imageAr = new byte[size];
 					readNBytes(inputStream, imageAr, 0, size);
 					queue.add(ImageIO.read(new ByteArrayInputStream(imageAr)));
+					onConnectlistener.onFrameReceived();
 					bufferCount++;
 					if (bufferCount >= bufferSize) {
 						imageReady = true;
 					}
 	
-					Thread.sleep(20);
+//					Thread.sleep(20);
 				}
 				Thread.sleep(1000);
 			}
