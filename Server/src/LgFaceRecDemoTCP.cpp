@@ -649,7 +649,7 @@ static void send_cmd_msg(struct cmd_msg *msg)
 	memset(buffer, 0, sizeof(struct video_buffer));
 	memcpy(&buffer->msg, msg, sizeof(struct cmd_msg));
 
-	printf("[%s] cmd_msg: 0x%08X 0x%08X\n", __func__, buffer->msg.type, buffer->msg.value);	
+	printf("[%s] send cmd_msg: 0x%08X 0x%08X\n", __func__, buffer->msg.type, buffer->msg.value);
 	do_send_cmd_msg(buffer);
 }
 
@@ -657,7 +657,7 @@ static void recv_cmd_msg(struct video_buffer *buffer, struct cmd_msg *msg)
 {
 	memcpy(msg, &buffer->msg, sizeof(struct cmd_msg));
 
-	printf("[%s] cmd_msg: 0x%08X 0x%08X\n", __func__, msg->type, msg->value);	
+	printf("[%s] recv cmd_msg: 0x%08X 0x%08X\n", __func__, msg->type, msg->value);
 	
 	free(buffer);
 }
@@ -957,7 +957,6 @@ static void do_draw_fps(struct task_info *task, struct video_buffer *buffer)
 
 static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 {
-	int nread;
 	clock_t clk;
 
 	if (gTcpConnectedPort == -1)
@@ -1024,14 +1023,12 @@ static struct task_info g_task_info[TID_NR] = {
 
 void start_video_stream(TTcpConnectedPort tcpConnectedPort)
 {
-	int ret;
-
 	struct cmd_msg msg;
 	msg.type = CMD_TYPE_NORMAL;
 	msg.value = CMD_TEST_RUN_MODE;
 	
 	send_cmd_msg(&msg);
-	printf("[%s] Triger reading\n", __func__);
+	printf("[%s] Trigger reading\n", __func__);
 }
 
 // perform face recognition with Raspberry Pi camera
@@ -1280,22 +1277,22 @@ int main(int argc, char *argv[])
     u_ignore_sigpipe();
 
     while(1) {
-        pid = fork();
-
-        if (pid < 0) {
-            printf("[Error] fork failed!\n");
-        }
-        else if (pid == 0) { // child
+//        pid = fork();
+//
+//        if (pid < 0) {
+//            printf("[Error] fork failed!\n");
+//        }
+//        else if (pid == 0) { // child
             get_env_value();
             state = camera_face_recognition( argc, argv );
             if(state == 1) cout << "Restart is required! Please type ./main again." << endl;
             exit(1);
-        }
-        else { // parent
-            printf("parent process is going to wait!\n");
-            terminated_pid = wait(&status);
-            printf("terminated pid = %d\n", terminated_pid);
-        }
+//        }
+//        else { // parent
+//            printf("parent process is going to wait!\n");
+//            terminated_pid = wait(&status);
+//            printf("terminated pid = %d\n", terminated_pid);
+//        }
     }
 
     return 0;

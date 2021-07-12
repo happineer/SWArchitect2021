@@ -7,6 +7,7 @@ import java.awt.*;
 
 public abstract class BaseMode implements Mode {
     private final UiController uiController;
+    private boolean isRunning = false;
 
     BaseMode(UiController uiController) {
         this.uiController = uiController;
@@ -45,5 +46,31 @@ public abstract class BaseMode implements Mode {
     protected void alertDialog(String message) {
         JFrame frame = getUiController().getMainFrame();
         JOptionPane.showMessageDialog(frame, message);
+    }
+
+    @Override
+    public RunningButtonMode getRunningButtonMode() {
+        return RunningButtonMode.ENABLE_ALL;
+    }
+
+    protected void setRunning(boolean isRunning) {
+        this.isRunning = isRunning;
+    }
+
+    @Override
+    public boolean isRunning() {
+        return isRunning;
+    }
+
+    @Override
+    public void start() {
+        setRunning(true);
+        appendUiLog(getModeName() + " Mode start");
+    }
+
+    @Override
+    public void stop() {
+        setRunning(false);
+        appendUiLog(getModeName() + " Mode stop");
     }
 }

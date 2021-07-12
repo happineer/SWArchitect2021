@@ -29,6 +29,7 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 	
 	@Override
 	public void start() {
+		super.start();
 		accuracyTestFrame = 1;
 		Path currentRelativePath = Paths.get("");
 		currentPath = currentRelativePath.toAbsolutePath().toString();		
@@ -42,7 +43,7 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 
 	@Override
 	public void stop() {
-		appendUiLog("Test Accuracy Mode stop");
+		super.stop();
 		PlaybackManager.getInstance().getPlayer().setOnPlayListener(null);
 	}
 
@@ -58,4 +59,8 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 		}
 	}
 
+	@Override
+	public RunningButtonMode getRunningButtonMode() {
+		return RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT;
+	}
 }
