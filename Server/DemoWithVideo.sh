@@ -13,4 +13,4 @@ if [ "$1" != "" ]; then
 fi
 
 echo "PORT NUMBER: "${VIDEO_PORT}
-./LgFaceRecDemoTCP ${VIDEO_PORT} friends_1280x720_12fps.smjpeg
+./LgFaceRecDemoTCP ${VIDEO_PORT} friends_960x540_98_12fps.smjpeg
