@@ -17,6 +17,7 @@ public class RunMode extends BaseMode {
 	
 	@Override
 	public void start() {
+		super.start();
 		NetworkManager networkManager = NetworkManager.getInstance();
 		appendUiLog("Run Mode start");
 		PlaybackManager.getInstance().playDirect();
@@ -25,7 +26,12 @@ public class RunMode extends BaseMode {
 
 	@Override
 	public void stop() {
+		super.stop();
 		PlaybackManager.getInstance().stop();
 	}
 
+	@Override
+	public RunningButtonMode getRunningButtonMode() {
+		return RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT;
+	}
 }

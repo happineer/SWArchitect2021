@@ -29,6 +29,7 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 	
 	@Override
 	public void start() {
+		super.start();
 		accuracyTestFrame = 1;
 		Path currentRelativePath = Paths.get("");
 		currentPath = currentRelativePath.toAbsolutePath().toString();		
@@ -42,11 +43,12 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 
 	@Override
 	public void stop() {
+		super.stop();
 		PlaybackManager.getInstance().getPlayer().setOnPlayListener(null);
 	}
 
 	@Override
-	public void onDisplayImage(BufferedImage image) {		
+	public void onDisplayImage(BufferedImage image) {
 		// Test
 		File outputfile = new File(currentPath + accuracyFolder + (accuracyTestFrame++) + ".png");
 	    try {
@@ -56,4 +58,8 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 		}
 	}
 
+	@Override
+	public RunningButtonMode getRunningButtonMode() {
+		return RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT;
+	}
 }

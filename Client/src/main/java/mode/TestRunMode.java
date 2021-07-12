@@ -18,16 +18,21 @@ public class TestRunMode extends BaseMode {
 	
 	@Override
 	public void start() {
+		super.start();
 		NetworkManager networkManager = NetworkManager.getInstance();
 		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_TEST_RUN);
-		appendUiLog("Test Run Mode start");
 		PlaybackManager.getInstance().play();
 		
 	}
 
 	@Override
 	public void stop() {
+		super.stop();
 		PlaybackManager.getInstance().stop();
 	}
 
+	@Override
+	public RunningButtonMode getRunningButtonMode() {
+		return RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT;
+	}
 }
