@@ -927,7 +927,7 @@ void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 	}
 
 	// feed the embeddings to the pretrained SVM's. Store the predicted labels in a vector
-	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels);
+	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels, buffer->faces);
 
     // draw bounding boxes and labels to the original image 
     draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
