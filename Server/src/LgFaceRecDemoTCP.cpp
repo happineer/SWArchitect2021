@@ -55,6 +55,7 @@ static int face_detect_max = 5;
 static int face_detect_acc_test_mode;
 static int face_detect_measure;
 static int face_detect_autostart;
+static int face_detect_send_timestamp = 0;
 
 enum INPUT_MODE {
 	INPUT_CAMERA = 0,
@@ -92,12 +93,13 @@ unsigned int FrameCount=0;
 
 static int buffer_count = MJPEG_OUT_BUF_NR;
 
-#define	TIME_STAMP_NR			20
+#define	TIME_STAMP_NR			14
 
 struct __attribute__((packed)) cmd_msg {
 	__u32 type;
 	__u32 value;
 };
+
 
 enum CMD_TYPE {
 	CMD_TYPE_NORMAL	 	= 0x1,
@@ -128,6 +130,7 @@ struct video_buffer {
     std::vector<matrix<float,0,1>> *face_embeddings;
     std::vector<double> *face_labels;
 	unsigned int frame_number;
+	long long timestamp;
 
 	int ntimes;
 	struct timespec times[TIME_STAMP_NR];
@@ -281,6 +284,19 @@ static inline void video_buffer_mark_time(struct video_buffer *buffer)
 	clock_gettime(CLOCK_MONOTONIC, &buffer->times[buffer->ntimes]);
 	buffer->ntimes++;
 }
+
+static inline void video_buffer_set_timestamp(struct video_buffer *buffer)
+{
+	struct timespec ts;
+	long long timestamp;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	timestamp = ts.tv_sec * 1000ULL;
+	timestamp += ts.tv_nsec / 1000000ULL;
+
+	buffer->timestamp = htobe64(timestamp);
+}
+
 
 static bool video_buffer_alloc(struct video_buffer *vbs, size_t imgSize)
 {
@@ -543,8 +559,6 @@ static bool LoadMotionJpegFrame(TMotionJpegFileDesc *FileDesc, struct video_buff
 		RewindMotionJpegFile(FileDesc);
 	}
 
-	video_buffer_mark_time(vp);
-
     return true;
 
 }
@@ -712,8 +726,6 @@ bool do_capture_camera(struct task_info *task, struct video_buffer *&vp)
 		return false;
 	}
 
-	video_buffer_init(vp);
-	video_buffer_mark_time(vp);
 	//printf("[%s]: imgOrigin : %p\n", __func__, imgOrigin);
 
 	//memcpy(vp->output, imgOrigin, buf_img_size);
@@ -755,7 +767,7 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 				printf("Failed to get Camera image...\n");
 				break;
 			}
-		
+			video_buffer_set_timestamp(vp);
 			video_buffer_mark_time(vp);
 			video_buffer_next();
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &vp, sizeof(vp));
@@ -775,6 +787,8 @@ void do_capture(struct task_info *task, struct video_buffer *buffer)
 				break;
 				//assert(0);
 			}
+			video_buffer_set_timestamp(vp);
+			video_buffer_mark_time(vp);
 			video_buffer_next();
 			int nwritten = write(ipcs[task->tid].sock[IPC_SEND], &vp, sizeof(vp));
 
@@ -964,10 +978,18 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 		return;
 
 	//Render captured image
-	if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu) < 0) {
-		diconnect_client();
-		return;
-		assert(0);
+	if (face_detect_send_timestamp) {
+		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu, buffer->timestamp) < 0) {
+			diconnect_client();
+			return;
+			assert(0);
+		}
+	} else {
+		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu) < 0) {
+			diconnect_client();
+			return;
+			assert(0);
+		}
 	}
 	clk = clock();
 	send_fps = (0.90 * send_fps) + (0.1 * (1 / ((double)(clk - pre_clk) / CLOCKS_PER_SEC)));
@@ -1266,6 +1288,18 @@ static void get_env_value(void)
 	if (value) {
 		face_detect_autostart = strtol(value, NULL, 0);
 		printf("[%s] FACE_DETECT_AUTOSTART face_detect_autostart = %d\n", __func__, face_detect_autostart);
+	}
+
+	value = getenv("FACE_DETECT_MEASURE");
+	if (value) {
+		face_detect_measure = strtol(value, NULL, 0);
+		printf("[%s] FACE_DETECT_MEASURE face_detect_measure = %d\n", __func__, face_detect_measure);
+	}
+
+	value = getenv("FACE_DETECT_SEND_TIMESTAMP");
+	if (value) {
+		face_detect_send_timestamp = strtol(value, NULL, 0);
+		printf("[%s] FACE_DETECT_SEND_TIMESTAMP face_detect_send_timestamp = %d\n", __func__, face_detect_send_timestamp);
 	}
 }
 

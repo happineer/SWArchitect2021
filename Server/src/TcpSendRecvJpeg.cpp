@@ -27,6 +27,36 @@ int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image)
 }
 
 //-----------------------------------------------------------------
+// TcpSendImageAsJpeg - Sends a Open CV Mat Image commressed as a 
+// jpeg image in side a TCP Stream on the specified TCP local port
+// and Destination. return bytes sent on success and -1 on failure
+//-----------------------------------------------------------------
+
+struct __attribute__((packed)) video_head {
+	unsigned int size;
+	unsigned int rev;
+	long long timestamp;
+};
+
+int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long long timestamp)
+{
+	struct video_head head;
+	unsigned int imagesize;
+
+    cv::imencode(".jpg", *Image, sendbuff, param);
+
+    head.size = htonl(sendbuff.size()); // convert image size to network format
+	head.rev = 0x12345678;
+	head.timestamp = timestamp;
+
+    if (WriteDataTcp(TcpConnectedPort,(unsigned char *)&head, sizeof(head)) != sizeof(head))
+	    return(-1);
+
+    return(WriteDataTcp(TcpConnectedPort,sendbuff.data(), sendbuff.size()));
+}
+
+
+//-----------------------------------------------------------------
 // END TcpSendImageAsJpeg
 //-----------------------------------------------------------------
 //-----------------------------------------------------------------
