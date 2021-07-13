@@ -68,14 +68,14 @@ public class BaseFrame extends JFrame {
 	public BaseFrame() {
 		setTitle("CMU LG SW Architect Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 1500, 900);
+		setBounds(100, 100, 1055, 900);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
 		setContentPane(contentPane);
 
 		imageView = new JLabel("");
-		imageView.setSize(1280, 720);
+		imageView.setSize(960, 540);
 		contentPane.add(imageView, BorderLayout.CENTER);
 
 		topPanel = new JPanel();

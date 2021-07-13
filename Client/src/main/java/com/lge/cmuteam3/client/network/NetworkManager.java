@@ -105,6 +105,10 @@ public class NetworkManager {
 	}
 
 	public void controlNano(int type, int value) {
+		if (nanoSocket == null) {
+			LOG.info("Socket is null.");
+			return;
+		}
 		try {
 			BufferedOutputStream bs = new BufferedOutputStream(nanoSocket.getOutputStream());
 			bs.write(type);
@@ -124,5 +128,16 @@ public class NetworkManager {
 	
 	public void setOnServerStateListener(OnServerStateListener onServerStateListener) {
 		this.onServerStateListener = onServerStateListener;
+	}
+
+	public void disconnect() {
+		if (nanoSocket != null) {
+			try {
+				nanoSocket.close();
+				nanoSocket = null;
+			} catch (IOException e) {
+				LOG.error("Socket Exception:" + e.getMessage());
+			}
+		}
 	}
 }
