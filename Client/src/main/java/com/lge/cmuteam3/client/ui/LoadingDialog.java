@@ -11,7 +11,7 @@ public class LoadingDialog extends JDialog {
 
     	getContentPane().setLayout(new BoxLayout(getContentPane(), BoxLayout.X_AXIS));
     	
-    	JLabel loadingImage = new JLabel("Rescan Processing...");
+    	JLabel loadingImage = new JLabel(name + " Processing...");
     	getContentPane().add(loadingImage);
 
 		URL url = getClass().getClassLoader().getResource("ajax-loader.gif");
