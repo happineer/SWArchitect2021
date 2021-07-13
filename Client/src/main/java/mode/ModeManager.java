@@ -4,6 +4,8 @@ import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.network.OnServerStateListener;
 import com.lge.cmuteam3.client.ui.OnUiEventListener;
 import com.lge.cmuteam3.client.ui.UiController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ModeManager implements OnUiEventListener, OnServerStateListener {
+	private static final Logger LOG = LoggerFactory.getLogger(ModeManager.class);
 
 	private static ModeManager instance;
 	private ArrayList<Mode> modeList = new ArrayList<>();
@@ -38,6 +41,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 		modeList.add(new RunMode(uiController));
 		modeList.add(new TestRunMode(uiController));
 		modeList.add(new TestAccuracyMode(uiController));
+		modeList.add(new RetroactiveRunMode(uiController));
 
 		uiController.setModePanel(modeList, this);
 	}
@@ -52,6 +56,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 
 	@Override
 	public void onUiStart(Mode mode) {
+		LOG.info("onUiStop:" + mode.getModeName());
 		// !(mode instanceof InitMode) init mode 는 별도의 모드가 아닌 내부 기능으로 분류될 수 있음. 
 		if (mode.needTransferSocket() && !NetworkManager.getInstance().isReady()) {
 			uiController.appendLog("NANO NOT READY. PRESS INIT");
@@ -73,6 +78,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 
 	@Override
 	public void onUiStop(Mode mode) {
+		LOG.info("onUiStop:" + mode.getModeName());
 		if (currentMode != null) {
 			currentMode.stop();
 			uiController.enableAllControlButtons();
