@@ -127,7 +127,8 @@ filename = "info.txt"
 info_path = os.path.abspath(os.path.join(os.path.dirname(__file__), filename))
 
 try:
-    os.remove(info_path)
+    if os.path.exists(info_path):
+        os.remove(info_path)
 except:
     print("failed accessing info.txt")
 
