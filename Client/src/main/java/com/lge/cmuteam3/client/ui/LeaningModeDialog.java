@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,7 +41,6 @@ public class LeaningModeDialog extends JDialog {
             LOG.info("name:" + name);
             if (name.length() == 0) {
                 JOptionPane.showMessageDialog(LeaningModeDialog.this, "Name is not inserted.");
-                listener.onDialogCanceled();
                 return;
             }
             dispose();
@@ -68,36 +67,19 @@ public class LeaningModeDialog extends JDialog {
         JLabel imageTextLabel = new JLabel("image(s) selected.");
         panel.add(imageTextLabel);
 
-        addWindowListener(new WindowListener() {
+        addWindowListener(new WindowAdapter() {
             @Override
             public void windowOpened(WindowEvent e) {
+                super.windowOpened(e);
                 LOG.info("windowOpened");
                 addImageTiles();
             }
 
             @Override
-            public void windowClosing(WindowEvent e) {
-            }
-
-            @Override
             public void windowClosed(WindowEvent e) {
+                super.windowClosed(e);
                 LOG.info("windowClosed");
-            }
-
-            @Override
-            public void windowIconified(WindowEvent e) {
-            }
-
-            @Override
-            public void windowDeiconified(WindowEvent e) {
-            }
-
-            @Override
-            public void windowActivated(WindowEvent e) {
-            }
-
-            @Override
-            public void windowDeactivated(WindowEvent e) {
+                listener.onDialogCanceled();
             }
         });
     }

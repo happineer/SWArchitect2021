@@ -69,7 +69,7 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
 
     @Override
     public void onDialogCanceled() {
-
+        ModeManager.getInstance().onUiStop(this);
     }
 
     @Override
