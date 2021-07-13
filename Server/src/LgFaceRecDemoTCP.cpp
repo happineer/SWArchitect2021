@@ -1316,7 +1316,8 @@ int camera_face_recognition(int argc, char *argv[])
 		int nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 		if (nfds == -1) {
 			perror("epoll_wait");
-			exit(EXIT_FAILURE);
+			continue;
+			//exit(EXIT_FAILURE);
 		}
 		
 		for (n = 0; n < nfds; ++n) {
