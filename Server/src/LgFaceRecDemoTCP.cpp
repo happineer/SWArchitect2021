@@ -1317,7 +1317,7 @@ int camera_face_recognition(int argc, char *argv[])
 					printf("[%s]:%d EPOLLERR\n", __func__, __LINE__);
 				}
 				if (events[n].events & EPOLLHUP) {
-					printf("[%s]:%d EPOLLERR\n", __func__, __LINE__);
+					printf("[%s]:%d EPOLLHUP\n", __func__, __LINE__);
 				}
 				handle_client_msg(epollfd, events[n].data.fd);
 			}
