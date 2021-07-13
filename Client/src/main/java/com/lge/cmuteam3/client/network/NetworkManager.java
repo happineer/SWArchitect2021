@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.Receiver;
@@ -34,7 +35,7 @@ public class NetworkManager {
 	}
 	
 	public synchronized void initialize() {
-		serviceUnavailable(1);
+		serviceUnavailable(Constants.CONNECTION_STATE_CONNECTING);
 		try {
 			for (int i = 0; i < 3; i++) {
 				init();
@@ -43,7 +44,7 @@ public class NetworkManager {
 				}
 				Thread.sleep(3000);
 			}
-			serviceUnavailable(2);
+			serviceUnavailable(Constants.CONNECTION_STATE_FAILED);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -88,7 +89,6 @@ public class NetworkManager {
 		}
 	}
 
-	// TODO :define fail state (as simply as possible)
 	private void serviceUnavailable(int state) {
 		isReady = false;
 		if (onServerStateListener != null) {

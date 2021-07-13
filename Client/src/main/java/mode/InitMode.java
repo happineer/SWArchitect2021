@@ -16,12 +16,12 @@ public class InitMode extends BaseMode {
 	@Override
 	public void start() {
 		super.start();
-		getUiController().updateConnectionStatus("Connecting");
 		NetworkManager manager = NetworkManager.getInstance();
 		if (manager.isReady()) {
 			appendUiLog("Already Initialized");
 			return;
 		}
+		getUiController().updateConnectionStatus("Connecting...");
 		NetworkManager.getInstance().initialize();
 	}
 

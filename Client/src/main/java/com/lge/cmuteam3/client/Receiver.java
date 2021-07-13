@@ -80,7 +80,6 @@ public class Receiver extends Thread {
 						imageReady = true;
 					}
 	
-//					Thread.sleep(20);
 				}
 				Thread.sleep(1000);
 			}
@@ -132,6 +131,7 @@ public class Receiver extends Thread {
 
 	public void stopSelf() {
 		resetBuffer();
+		playbakMonitor.stop();
 		this.isReceiving = false;
 	}
 
@@ -146,6 +146,7 @@ public class Receiver extends Thread {
 			start();
 			isStart = true;
 		}
+		playbakMonitor.start();
 		this.isReceiving = true;
 	}
 	

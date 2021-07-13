@@ -2,8 +2,14 @@ package com.lge.cmuteam3.client;
 
 public class Constants {
 
-	public static int CONTROL_TYPE_NORMAL = 0x1;
+	// CONNECTION STATE
+	public static int CONNECTION_STATE_CONNECTING = 1;
+	public static int CONNECTION_STATE_FAILED = 2;
 	
+	// NANO CONTROL CMD TYPE
+	public static int CONTROL_TYPE_NORMAL = 0x1;
+
+	// NANO CONTROL CMD VALUE
 	public static int CONTROL_VALUE_STOP = 0x0;
 	public static int CONTROL_VALUE_RUN = 0x1;
 	public static int CONTROL_VALUE_TEST_RUN = 0x2;
