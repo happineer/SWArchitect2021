@@ -638,6 +638,15 @@ static void compute_duration(struct video_buffer *buffer)
 	printf("%s\n", buf);
 }
 
+static void init_socket(int sock)
+{
+	if (fcntl(sock, F_SETFD, FD_CLOEXEC) < 0) {
+		fprintf(stderr, "[%s]: FD_CLOEXEC errno: %d\n", __func__, errno);
+	}
+	if (fcntl(sock, F_SETFL, O_NONBLOCK) < 0) {
+		fprintf(stderr, "[%s]: O_NONBLOCK errno: %d\n", __func__, errno);
+	}
+}
 
 static void comm_socket_init(int *sock)
 {
@@ -1046,8 +1055,12 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	struct cmd_msg msg;
 	int ret;
 
+	printf("[%s]:%d\n", __func__, __LINE__);
 	ret = ReadDataTcp(tcpConnectedPort, (unsigned char *)&msg, sizeof(msg));
 	if (ret != sizeof(msg)) {
+		if (ret == 0)
+			printf("[%s]:%d diconnected client\n", __func__, __LINE__);
+
 		if (epoll_ctl(epollfd, EPOLL_CTL_DEL, tcpConnectedPort, NULL) == -1) {
 			perror("epoll_ctl: EPOLL_CTL_DEL conn_sock");
 			//exit(EXIT_FAILURE);
@@ -1296,6 +1309,16 @@ int camera_face_recognition(int argc, char *argv[])
 			} else if (events[n].data.fd == timerfd) {
 				handle_timer(timerfd);
 			} else { // from client
+				printf("[%s]:%d events[n].events : 0x%08X\n", __func__, __LINE__, events[n].events);
+				if (events[n].events & EPOLLIN) {
+					printf("[%s]:%d EPOLLIN\n", __func__, __LINE__);
+				}
+				if (events[n].events & EPOLLERR) {
+					printf("[%s]:%d EPOLLERR\n", __func__, __LINE__);
+				}
+				if (events[n].events & EPOLLHUP) {
+					printf("[%s]:%d EPOLLERR\n", __func__, __LINE__);
+				}
 				handle_client_msg(epollfd, events[n].data.fd);
 			}
 		}
