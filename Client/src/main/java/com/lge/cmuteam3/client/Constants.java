@@ -8,5 +8,6 @@ public class Constants {
 	public static int CONTROL_VALUE_RUN = 0x1;
 	public static int CONTROL_VALUE_TEST_RUN = 0x2;
 	public static int CONTROL_VALUE_ACCURACY = 0x3;
-	
+	public static int CONTROL_VALUE_RESCAN = 0x4;
+	public static int CONTROL_VALUE_RARUN = 0x5;
 }
