@@ -74,17 +74,23 @@ def mk_symlink(video_filename):
 def main():
     script_title()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cmd', '-c', required=True, default=[], choices=['clear', 'provision', 'list'], help='a command list')
+    parser.add_argument('--cmd', '-c', required=True, default=[], choices=['clear', 'provision', 'list', 'mksymlink'], help='a command list')
     parser.add_argument('--artifact-version', '-v', required=False, default=None, help='artifact version')
     parser.add_argument('--video-file', '-f', required=False, default="friends_960x540_98_12fps.smjpeg", help='video filename')
     opt = parser.parse_args()
 
     artifact_mgr = ArtifactManager()
 
+    if opt.cmd == "mksymlink":
+        mk_symlink(opt.video_file)
+        return
+
     if opt.cmd == "clear":
         show_summary("* Command: clear artifacts at local path")
         artifact_mgr.clear()
-    elif opt.cmd == "provision":
+        return
+
+    if opt.cmd == "provision":
         show_summary("* Command: provisioning the artifacts to local path")
         if opt.artifact_version is not None:
             artifact_mgr.provision(opt.artifact_version)
@@ -97,6 +103,7 @@ def main():
         artifact_mgr.show_artifact_list()
 
     mk_symlink(opt.video_file)
+
 
 if __name__ == "__main__":
     main()
