@@ -11,7 +11,7 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class StatisticsPanel extends JPanel {
-	private static final int TEXTFIELD_WIDTH = 150;
+	private static final int TEXTFIELD_WIDTH = 210;
 
 	private static final Logger LOG = LoggerFactory.getLogger(StatisticsPanel.class);
 
@@ -60,13 +60,13 @@ public class StatisticsPanel extends JPanel {
 		avrLatencyTextField = new JTextField();
 		setCommonStyleTextField(avrLatencyTextField);
 		
-		fullTimeFpsLabel = new JLabel("Full-time FPS");
+		fullTimeFpsLabel = new JLabel("Average Frame rate");
 		add(fullTimeFpsLabel);
 
 		fullTimeFpsTextField = new JTextField();
 		setCommonStyleTextField(fullTimeFpsTextField);
 
-		fpsLabel = new JLabel("FPS");
+		fpsLabel = new JLabel("Frame rate");
 		add(fpsLabel);
 
 		fpsTextField = new JTextField();
@@ -98,8 +98,8 @@ public class StatisticsPanel extends JPanel {
 		maxLatencyTextField.setText(Long.toString(max));
 		minLatencyTextField.setText(Long.toString(min));
 		avrLatencyTextField.setText(Long.toString(avr));
-		fullTimeFpsTextField.setText(String.format("%.4f", fullTimeFps));
-		fpsTextField.setText(String.format("%.4f", fps));
+		fullTimeFpsTextField.setText(String.format("%.2f", fullTimeFps));
+		fpsTextField.setText(String.format("%.2f", fps));
 
 		String dateFormatted = formatTime(elapsedTime);
 		elapsedTimeTextField.setText(dateFormatted);

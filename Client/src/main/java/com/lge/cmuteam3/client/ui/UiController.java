@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit;
 public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     private static final Logger LOG = LoggerFactory.getLogger(UiController.class);
 
+    public static final String TIME_FORMAT_LOG = "yyyy-MM-dd hh:mm:ss.SSS";
+
     private final BaseFrame frame;
     private final StatisticsPanel statisticsPanel;
     private final NetworkUiLogManager networkUiLogManager;
@@ -82,7 +84,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     }
 
     public void appendLog(long time, String message) {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
+        SimpleDateFormat dateFormat = new SimpleDateFormat(TIME_FORMAT_LOG);
         String currentTime = dateFormat.format(new Date(time));
 
         frame.appendLog(currentTime, message);
@@ -92,7 +94,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
      * clear and append
      */
     public void setLog(String message) {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
+        SimpleDateFormat dateFormat = new SimpleDateFormat(TIME_FORMAT_LOG);
         String currentTime = dateFormat.format(new Date());
 
         clearLog();
@@ -113,7 +115,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
 
     public void updateImage(Frame newFrame) {
     	BufferedImage image = newFrame.getFrameImage();
-        uiModel.updateImageAdded();
+        uiModel.updateImageAdded(newFrame.getInitialTime());
 
         frame.updateImage(image);
         statisticsPanel.update(uiModel);
@@ -149,7 +151,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     }
 
     public void disableControlButtons(Mode mode) {
-        LOG.info("disableControlButtons : ");
+        LOG.info("disableControlButtons");
         if (mode.getRunningButtonMode() == Mode.RunningButtonMode.ENABLE_ALL) {
             return;
         }
@@ -157,7 +159,6 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
         JPanel topPanel = frame.getModePanel();
         Component[] components = topPanel.getComponents();
         for (Component component : components) {
-            LOG.info("component : " + component.getName());
             if (component instanceof ModeButton) {
                 if (mode != null
                         && mode.getRunningButtonMode() == Mode.RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT

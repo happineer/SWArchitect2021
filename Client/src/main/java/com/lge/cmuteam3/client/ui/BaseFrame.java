@@ -68,7 +68,7 @@ public class BaseFrame extends JFrame {
 	public BaseFrame() {
 		setTitle("CMU LG SW Architect Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 1055, 900);
+		setBounds(100, 100, 1091, 900);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
@@ -181,12 +181,12 @@ public class BaseFrame extends JFrame {
 		dataset.setType(HistogramType.FREQUENCY);
 		dataset.addSeries("Hist", data, 30);
 
-		JFreeChart chart = ChartFactory.createHistogram(null, "ms", "Count", dataset, PlotOrientation.VERTICAL,
+		JFreeChart chart = ChartFactory.createHistogram(null, "ms", "Frames", dataset, PlotOrientation.VERTICAL,
 				false, false, false);
 
 		EventQueue.invokeLater(() -> {
 			ChartPanel panel = new ChartPanel(chart);
-			panel.setPreferredSize(new Dimension(600, 230));
+			panel.setPreferredSize(new Dimension(550, 230));
 
 			jitterPanel.removeAll();
 			jitterPanel.add(panel);

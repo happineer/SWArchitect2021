@@ -22,11 +22,15 @@ public class UiModel {
 
     ArrayList<Long> histogramData = new ArrayList<>();
 
-    public void updateImageAdded() {
+    public void updateImageAdded(long initialTime) {
         long currTime = System.currentTimeMillis();
-        startTime.compareAndSet(0, currTime);
 
+        // Save the first time
+        startTime.compareAndSet(0, initialTime);
+
+        // frame count
         long currCount = count.incrementAndGet();
+
         long prevTime = previousTime.get();
         previousTime.set(currTime);
 
@@ -34,21 +38,22 @@ public class UiModel {
             prevTime = currTime;
         }
 
-        long delay = currTime - prevTime;
-        long currSum = sum.addAndGet(delay);
+        long latency = currTime - initialTime;
+
+        long currSum = sum.addAndGet(latency);
         avr.set(currSum / currCount);
 
         long prevMax = max.get();
-        if (delay > prevMax) {
-            max.set(delay);
+        if (latency > prevMax) {
+            max.set(latency);
         }
 
         long prevMin = min.get();
-        if (delay < prevMin && delay != 0) {
-            min.set(delay);
+        if (latency < prevMin && latency != 0) {
+            min.set(latency);
         }
 
-        long jitter = delay - 83L;
+        long jitter = currTime - prevTime;
         if (jitter < 0L) {
             jitter = 0L;
         }
@@ -57,9 +62,10 @@ public class UiModel {
         long gapTime = currTime - startTime.get() + 1;
 
         fullTimeFps = (double) count.get() / gapTime * 1000;
-        fps = 1000d / delay;
+        fps = 1000d / jitter;
 
-        LOG.info("fullTimeFps:" + fullTimeFps + " fps:" + fps);
+//        LOG.info("fullTimeFps:" + fullTimeFps + " fps:" + fps);
+//        LOG.info("initialTime:" + initialTime + " currTime:" + currTime);
     }
 
     long getCount() {
