@@ -751,7 +751,7 @@ bool do_capture_camera(struct task_info *task, struct video_buffer *&vp)
 		return false;
 	}
 
-	if (!g_camera->CaptureRGBA(&imgOrigin, 1000, true)) {
+	if (!g_camera->CaptureRGBA(&imgOrigin, 3000, true)) {
 		printf("failed to capture RGBA image from camera\n");
 		//assert(0);
 		return false;
@@ -1124,10 +1124,10 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	// nothing...
 #else
 	if (msg.value == CMD_RUN_MODE) {
-		usleep(1000 * 1000);
 		if (!g_camera) {
 			g_camera = getCamera(imgWidth, imgHeight);
 			printf("[%s]: opened camera\n", __func__);
+		    usleep(1000 * 1000);
 		}
 	} else {
 		if (g_camera) {
