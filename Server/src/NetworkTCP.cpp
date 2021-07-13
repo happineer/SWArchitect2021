@@ -258,6 +258,7 @@ ssize_t WriteDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, siz
                                   length - total_bytes_written,0);
      if (bytes_written == -1)
        {
+	   	printf("[%s]: errno: %d %s\n", __func__, errno, strerror(errno));
        return(-1);
       }
      total_bytes_written += bytes_written;
