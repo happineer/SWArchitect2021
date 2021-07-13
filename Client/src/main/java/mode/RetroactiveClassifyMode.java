@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.awt.*;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.Executor;
@@ -34,6 +35,18 @@ public class RetroactiveClassifyMode extends BaseMode {
         String targetFolder = prop.getProperty("client.ssh.unknownsFolder");
 
         LOG.info("sourceFolder:" + sourceFolder + " targetFolder:" + targetFolder);
+
+        File file = new File(targetFolder);
+        if (!file.exists()) {
+            boolean mkdir = file.mkdir();
+            LOG.info("Create target folder:" + mkdir);
+        } else if (file.isFile()) {
+            String message = "The target is not a folder. see the client.properties file.";
+            alertDialog(message);
+            appendUiLog(message);
+            ModeManager.getInstance().onUiStop(this);
+            return;
+        }
 
         EventQueue.invokeLater(() -> {
             LoadingDialog dialog = new LoadingDialog(getUiController().getMainFrame(), getModeName());
