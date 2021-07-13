@@ -258,10 +258,12 @@ void face_classifier::prediction(   std::vector<sample_type_embedding> *face_emb
         }
         DEBUG("label: %f\n\n",label);
 
-        frame_cnt++;
-        if (label < 0 && faces != NULL && (frame_cnt%20)==0) {
-            frame_cnt = 0;
-            handle_unknown_data(unknown_index++, faces->at(i));
+        if (retroactive_mode) {
+            frame_cnt++;
+            if (label < 0 && faces != NULL && (frame_cnt%20)==0) {
+                frame_cnt = 0;
+                handle_unknown_data(unknown_index++, faces->at(i));
+            }
         }
         //printf("-1 votes: %d\n", this->num_classifiers - num_votes);
         face_labels->push_back(label);
