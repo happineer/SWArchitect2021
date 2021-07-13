@@ -746,9 +746,14 @@ bool do_capture_camera(struct task_info *task, struct video_buffer *&vp)
 {
 	float* imgOrigin = NULL;	// camera image
 
+	if (!g_camera) {
+		printf("[%s]: g_camera is null!!\n", __func__);
+		return false;
+	}
+
 	if (!g_camera->CaptureRGBA(&imgOrigin, 1000, true)) {
 		printf("failed to capture RGBA image from camera\n");
-		assert(0);
+		//assert(0);
 		return false;
 	}
 
@@ -1087,6 +1092,8 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	
 		case CMD_RUN_MODE:
 			printf("[%s]: CMD_RUN_MODE\n", __func__);
+			if (g_camera)
+				return;
 			video_buffer_do_flush();
 			break;
 	
@@ -1099,16 +1106,39 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 			printf("[%s]: CMD_TEST_ACC\n", __func__);
 			video_buffer_do_flush();
 			break;
+
+		case CMD_RESCAN:
+			printf("[%s]: CMD_RESCAN\n", __func__);
+			video_buffer_do_flush();
+			SAFE_DELETE(g_camera);
+			exit(3);
+			usleep(1000 * 1000);
+			break;
+
+		default:
+			printf("[%s]: Unknown Command\n", __func__);
+			return;
 	}
 
-	if (msg.value == CMD_RESCAN) {
-		video_buffer_do_flush();
-		printf("[%s]: CMD_RESCAN\n", __func__);
-		SAFE_DELETE(g_camera);
-		exit(3);
+#ifdef ALWAYS_OPEN_CAMERA
+	// nothing...
+#else
+	if (msg.value == CMD_RUN_MODE) {
+		usleep(1000 * 1000);
+		if (!g_camera) {
+			g_camera = getCamera(imgWidth, imgHeight);
+			printf("[%s]: opened camera\n", __func__);
+		}
 	} else {
-		send_cmd_msg(&msg);
+		if (g_camera) {
+			SAFE_DELETE(g_camera);
+			g_camera = NULL;
+			printf("[%s]: closed camera\n", __func__);
+		}
 	}
+#endif
+
+	send_cmd_msg(&msg);
 }
 
 static struct task_info g_task_info[TID_NR] = {
@@ -1169,6 +1199,7 @@ int camera_face_recognition(int argc, char *argv[])
         }
 	}
 
+#ifdef ALWAYS_OPEN_CAMERA
 	int width = VIDEO_WIDTH, height = VIDEO_HEIGHT;
     if (usecamera)
     {
@@ -1187,8 +1218,10 @@ int camera_face_recognition(int argc, char *argv[])
         width = g_camera->GetWidth();
         height = g_camera->GetHeight();
     }
+#endif
 
 	printf("[%s]: Video  Width = %d Height = %d\n", __func__, imgWidth, imgHeight);
+#ifdef ALWAYS_OPEN_CAMERA
 	printf("[%s]: Camera Width = %d Height = %d\n", __func__, width, height);
 	if (video_path && usecamera) {
 		assert(imgWidth == width);
@@ -1198,6 +1231,7 @@ int camera_face_recognition(int argc, char *argv[])
 		imgWidth = width;
 		imgHeight = height;
 	}
+#endif
 
 	// allocate CUDA buffer for the image
 	buf_img_size = (imgWidth * imgHeight * (sizeof(float4) * 8)) / 8;
@@ -1297,6 +1331,7 @@ int camera_face_recognition(int argc, char *argv[])
 					CloseTcpConnectedPort(connectedPort);
 					continue;
 				}
+				//init_socket(connectedPort);
 				gTcpConnectedPort = connectedPort;
 				printf("Accepted connection Request\n");
 				ev.data.fd = gTcpConnectedPort;
