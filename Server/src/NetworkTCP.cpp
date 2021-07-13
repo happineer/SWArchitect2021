@@ -232,8 +232,12 @@ ssize_t ReadDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, size
     {
       if ((bytes = recv(TcpConnectedPort, (char *)(data+i), length  - i,0)) == -1) 
       {
-       return (-1);
+       	return (-1);
       }
+	  if (bytes == 0) {
+		 printf("[%s]: diconnected\n", __func__);
+		 return 0;
+	  }
     }
   return(length);
 }
