@@ -78,11 +78,11 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 
 	@Override
 	public void onUiStop(Mode mode) {
-		LOG.info("onUiStop:" + mode.getModeName());
+		LOG.info("onUiStop:" + (mode == null? "no mode" : mode.getModeName()));
 		if (currentMode != null) {
 			currentMode.stop();
-			uiController.enableAllControlButtons();
 		}
+		uiController.enableAllControlButtons();
 		currentMode = null;
 	}
 
@@ -97,6 +97,8 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 			uiController.updateConnectionStatus("Reconnecting...");
 		else if (serverState == 2)
 			uiController.updateConnectionStatus("Failed");
+		else if (serverState == 0)
+			uiController.updateConnectionStatus("Disconnected");
 		onUiStop(currentMode);
 	}
 }
