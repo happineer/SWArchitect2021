@@ -29,7 +29,7 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
 
     @Override
     public void start() {
-        appendUiLog("Learn Mode start");
+        super.start();
 
         JFrame frame = getUiController().getMainFrame();
 
@@ -55,11 +55,6 @@ public class LearnMode extends BaseMode implements LeaningModeDialog.OnDialogEve
                 ModeManager.getInstance().onUiStop(this);
             }
         });
-    }
-
-    @Override
-    public void stop() {
-        appendUiLog("Learn Mode stop");
     }
 
     @Override

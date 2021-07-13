@@ -59,7 +59,7 @@ public class RescanMode extends BaseMode {
 
     @Override
     public boolean needTransferSocket() {
-        return false;
+        return true;
     }
 
     @Override

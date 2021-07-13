@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.Properties;
+import java.util.Vector;
 
 public class ScpProxy {
     private static final Logger LOG = LoggerFactory.getLogger(ScpProxy.class);
@@ -72,6 +73,41 @@ public class ScpProxy {
 
             copyLocalToRemote(session, file.getAbsolutePath(), targetDir, file.getName());
         } catch (JSchException | IOException e) {
+            e.printStackTrace();
+            LOG.error("sendFile error:" + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean receiveFolder(String sourceFolder, String targetFolder) {
+        Channel channel = null;
+        ChannelSftp channelSftp = null;
+
+        try {
+            Session session = createSession(id, serverIp, port, keyFilePath, null, password);
+
+            LOG.info("sourceFolder :" + sourceFolder);
+            LOG.info("targetFolder :" + targetFolder);
+
+            channel = session.openChannel("sftp");
+            channel.connect();
+
+            channelSftp = (ChannelSftp) channel;
+
+            LOG.info("PWD:" + channelSftp.pwd());
+            channelSftp.cd(sourceFolder);
+            Vector ls = channelSftp.ls("*");
+
+            int size = ls.size();
+            LOG.info("Unknown images size :" + size);
+
+            for (Object l : ls) {
+                ChannelSftp.LsEntry entry = (ChannelSftp.LsEntry) l;
+                copyRemoteToLocal(session, sourceFolder, targetFolder, entry.getFilename());
+            }
+        } catch (JSchException | SftpException | IOException e) {
             e.printStackTrace();
             LOG.error("sendFile error:" + e.getMessage());
             return false;
@@ -229,5 +265,100 @@ public class ScpProxy {
             }
         }
         return b;
+    }
+
+    private void copyRemoteToLocal(Session session, String fromServer, String toLocal, String fileName) throws JSchException, IOException {
+        fromServer = fromServer + File.separator + fileName;
+        String prefix = null;
+
+        if (new File(toLocal).isDirectory()) {
+            prefix = toLocal + File.separator;
+        }
+
+        String command = "scp -f " + fromServer;
+        Channel channel = session.openChannel("exec");
+        ((ChannelExec) channel).setCommand(command);
+
+        // get I/O streams for remote scp
+        OutputStream out = channel.getOutputStream();
+        InputStream in = channel.getInputStream();
+
+        channel.connect();
+
+        byte[] buf = new byte[1024];
+
+        // send '\0'
+        buf[0] = 0;
+        out.write(buf, 0, 1);
+        out.flush();
+
+        while (true) {
+            int c = checkAck(in);
+            if (c != 'C') {
+                break;
+            }
+
+            // read '0644 '
+            in.read(buf, 0, 5);
+
+            long filesize = 0L;
+            while (true) {
+                if (in.read(buf, 0, 1) < 0) {
+                    // error
+                    break;
+                }
+                if (buf[0] == ' ') break;
+                filesize = filesize * 10L + (long) (buf[0] - '0');
+            }
+
+            String file = null;
+            for (int i = 0; ; i++) {
+                in.read(buf, i, 1);
+                if (buf[i] == (byte) 0x0a) {
+                    file = new String(buf, 0, i);
+                    break;
+                }
+            }
+
+            System.out.println("file-size=" + filesize + ", file=" + file);
+
+            // send '\0'
+            buf[0] = 0;
+            out.write(buf, 0, 1);
+            out.flush();
+
+            // read a content of lfile
+            FileOutputStream fos = new FileOutputStream(prefix == null ? toLocal : prefix + file);
+            int foo;
+            while (true) {
+                if (buf.length < filesize) foo = buf.length;
+                else foo = (int) filesize;
+                foo = in.read(buf, 0, foo);
+                if (foo < 0) {
+                    // error
+                    break;
+                }
+                fos.write(buf, 0, foo);
+                filesize -= foo;
+                if (filesize == 0L) break;
+            }
+
+            if (checkAck(in) != 0) {
+                System.exit(0);
+            }
+
+            // send '\0'
+            buf[0] = 0;
+            out.write(buf, 0, 1);
+            out.flush();
+
+            try {
+                if (fos != null) fos.close();
+            } catch (Exception ex) {
+                System.out.println(ex);
+            }
+        }
+
+        channel.disconnect();
     }
 }

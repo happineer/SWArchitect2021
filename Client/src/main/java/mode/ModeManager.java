@@ -42,6 +42,7 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 		modeList.add(new TestRunMode(uiController));
 		modeList.add(new TestAccuracyMode(uiController));
 		modeList.add(new RetroactiveRunMode(uiController));
+		modeList.add(new RetroactiveClassifyMode(uiController));
 
 		uiController.setModePanel(modeList, this);
 	}
