@@ -133,6 +133,7 @@ public class NetworkManager {
 	public void disconnect() {
 		if (nanoSocket != null) {
 			try {
+				serviceUnavailable(0);
 				nanoSocket.close();
 				nanoSocket = null;
 			} catch (IOException e) {
