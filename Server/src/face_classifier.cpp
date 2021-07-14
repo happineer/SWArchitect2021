@@ -2,6 +2,11 @@
 
 #include "face_classifier.h"   
 #include <ctime>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string>
+#include <fstream>
+
 
 //#define DEBUG_PRINT_ON
 #ifdef DEBUG_PRINT_ON
@@ -12,8 +17,8 @@
 
 #define RETROACTIVE_CAPTURE_INTERVAL 20
 
-int unknown_index;
-int frame_cnt;
+//int unknown_index;
+//int frame_cnt;
 
     
 face_classifier::face_classifier(face_embedder *embedder){
@@ -44,6 +49,33 @@ face_classifier::~face_classifier(){
 
 int face_classifier::need_restart() {
     return restart;
+}
+
+int get_lines(string fname) {
+    int numLines = 0;
+    //std::ifstream in("a.txt", std::ifstream::in);
+    std::ifstream in(fname.c_str(), std::ifstream::in);
+    std::string unused;
+    while ( std::getline(in, unused) )
+        ++numLines;
+
+    return numLines;
+}
+
+bool file_existed (std::string& name) {
+  struct stat buffer;
+  return (stat (name.c_str(), &buffer) == 0);
+}
+
+void face_classifier::retroactive_init() {
+    unknown_index = 1;
+    if (file_existed (unknown_filename)) {
+        cout << "[RETROACTIVE] unknown_history file exist!" << endl;
+        unknown_index = get_lines(unknown_filename);
+        unknown_index++;
+    }
+    cout << "[RETROACTIVE] unknown_index: " << unknown_index << endl;
+    frame_cnt = 1;
 }
 
 // make first prediction 
@@ -111,8 +143,6 @@ int face_classifier::get_info(std::vector<string> *info){
     return success;
 }
 
-
-
 // prediction for single sample
 void face_classifier::prediction(   sample_type_embedding *face_embedding, 
                                     double *face_label){
@@ -150,26 +180,29 @@ std::string get_curr_time()
     return time_str;
 }
 
-void save_unknown_data(string unknown_filename, string detection_time) {
+void face_classifier::save_unknown_data(string &unknown_img_filename, string &detection_time) {
     cout << "=============================" << endl;
     cout << "save unknown data" << endl;
-    cout << "unknown_label: " << unknown_filename << endl;
+    cout << "unknown_label: " << unknown_img_filename << endl;
     cout << "unknown_detection_time: " << detection_time << endl;
     cout << "=============================" << endl;
+    string cmd = "echo " + unknown_img_filename + ":" + detection_time + " >> " + unknown_filename;
+    cout << "cmd: " << cmd << endl;
+    system(cmd.c_str());
 }
 
-void handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face) {
-    char unknown_filename_buff[100];
+void face_classifier::handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face) {
+    char unknown_img_filename_buff[100];
     std::string unknown_index_zfill = std::to_string(unknown_index);
     padTo(unknown_index_zfill, 10, '0');
-    string unknown_filename = "unknown-" + unknown_index_zfill + ".jpg";
-    string unknown_filename_path = "./faces/unknown/" + unknown_filename;
-    strcpy(unknown_filename_buff, unknown_filename_path.c_str());
-    save_jpeg(face, unknown_filename_buff);
+    string unknown_img_filename = "unknown-" + unknown_index_zfill + ".jpg";
+    string unknown_img_filename_path = "./" + unknown_dir + unknown_img_filename;
+    strcpy(unknown_img_filename_buff, unknown_img_filename_path.c_str());
+    save_jpeg(face, unknown_img_filename_buff);
 
     std::string detection_time = get_curr_time();
     std::cout << "detection_time(unknown): " << detection_time << std::endl;
-    save_unknown_data(unknown_filename, detection_time);
+    save_unknown_data(unknown_img_filename, detection_time);
 }
 
 // prediction for multiple samples. 

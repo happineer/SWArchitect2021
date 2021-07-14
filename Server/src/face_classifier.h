@@ -35,6 +35,11 @@ public:
     void get_label_encoding(std::vector<std::string> *labels);
     int need_restart();
 
+    // retroactive
+    void retroactive_init();
+    void save_unknown_data(string &unknown_img_filename, string &detection_time);
+    void handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face);
+
 private:
     void init(face_embedder *embedder);
     int deserialize_svm(int classes);
@@ -56,6 +61,8 @@ private:
     std::string info_dir = "faces/info.txt";                // information about svm training
     std::string svm_dir = "svm/";                           // dir to store the svm for later reuse
     std::string train_data_dir = "faces/train/cropped/";    // dir containing the training face-images
+    std::string unknown_dir = "faces/unknown/";             // dir containing unknown images when retroactive mode
+    std::string unknown_filename = "faces/unknown_history.txt";    // file containing the time unknown person is detected
 
     
     //face_embedder embedder;                                 // embeddings network for generate training data
@@ -66,7 +73,11 @@ private:
     int num_classes;
     int num_classifiers;
     int restart;
+
+    // retroactive
     int retroactive;
+    int unknown_index;
+    int frame_cnt;
 };
 
 
