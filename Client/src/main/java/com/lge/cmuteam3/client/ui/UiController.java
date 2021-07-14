@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 public class UiController implements NetworkUiLogManager.OnLogAddedListener {
     private static final Logger LOG = LoggerFactory.getLogger(UiController.class);
 
-    public static final String TIME_FORMAT_LOG = "yyyy-MM-dd hh:mm:ss.SSS";
+    public static final String TIME_FORMAT_LOG = "hh:mm:ss.SSS";
 
     private final BaseFrame frame;
     private final StatisticsPanel statisticsPanel;
@@ -49,7 +49,9 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
 
     public void setModePanel(List<Mode> modeList, OnUiEventListener modeManager) {
         JPanel panel = frame.getModePanel();
-        panel.add(new JLabel("Mode"));
+        JLabel mode1 = new JLabel("Mode");
+        mode1.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
+        panel.add(mode1);
 
         modeList.forEach((mode) -> {
             ModeButton button = new ModeButton(mode);
@@ -179,7 +181,7 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
             if (component instanceof JButton) {
                 component.setEnabled(true);
                 JButton button = (JButton) component;
-                button.setText(button.getText().replace("stop", "start"));
+                button.setText(button.getText().replace(" stop", ""));
             }
         }
     }

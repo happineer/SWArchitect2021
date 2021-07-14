@@ -4,6 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -11,7 +15,7 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class StatisticsPanel extends JPanel {
-	private static final int TEXTFIELD_WIDTH = 210;
+	private static final int TEXTFIELD_WIDTH = 220;
 
 	private static final Logger LOG = LoggerFactory.getLogger(StatisticsPanel.class);
 
@@ -38,6 +42,7 @@ public class StatisticsPanel extends JPanel {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
 		framesLabel = new JLabel("Frames");
+		framesLabel.setFont(new Font("Courier New", Font.PLAIN, 19));
 		framesLabel.setVerticalAlignment(SwingConstants.TOP);
 		add(framesLabel);
 
@@ -84,12 +89,21 @@ public class StatisticsPanel extends JPanel {
 		add(elapsedTimeLabel);
 		elapsedTimeTextField = new JTextField();
 		setCommonStyleTextField(elapsedTimeTextField);
+
+		Component[] components = getComponents();
+		for (Component c : components) {
+			c.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
+		}
 	}
 
 	private void setCommonStyleTextField(JTextField textField) {
 		textField.setEditable(false);
 		textField.setText("0");
 		textField.setColumns(1);
+		Border rounded = new LineBorder(new Color(150,150,150), 1, true);
+		Border empty = new EmptyBorder(0, 5, 7, 0);
+		Border border = new CompoundBorder(empty, textField.getBorder());
+		textField.setBorder(border);
 		setInlineTextField(textField);
 		add(textField);
 	}

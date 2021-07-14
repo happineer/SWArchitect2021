@@ -1,6 +1,5 @@
 package com.lge.cmuteam3.client.ui;
 
-import com.lge.cmuteam3.client.FileProperties;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -45,6 +44,8 @@ public class BaseFrame extends JFrame {
 	private final JPanel modePanel;
 	
 	private JPanel chartPanel;
+	private JPanel bottomLeftPanel;
+	private JLabel logLabel;
 
 	public JLabel getImageView() {
 		return imageView;
@@ -69,7 +70,7 @@ public class BaseFrame extends JFrame {
 	public BaseFrame() {
 		setTitle("CMU LG SW Architect Team 3");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 1091, 900);
+		setBounds(100, 100, 1088, 916);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		contentPane.setLayout(new BorderLayout(0, 0));
@@ -89,34 +90,51 @@ public class BaseFrame extends JFrame {
 		topPanel.add(modePanel, BorderLayout.NORTH);
 
 		labelConnection = new JLabel("Server connection");
+		labelConnection.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
 		statusPanel.add(labelConnection);
 		
 		ConnectionStatusTextField = new JTextField();
+		ConnectionStatusTextField.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
 		statusPanel.add(ConnectionStatusTextField);
-		ConnectionStatusTextField.setColumns(12);
+		ConnectionStatusTextField.setColumns(15);
 		ConnectionStatusTextField.setEditable(false);
 		
 		
-		labelServer = new JLabel("Target Server");		
+		labelServer = new JLabel("Target Server");
+		labelServer.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
 		statusPanel.add(labelServer);
 
 		serverAddressTextField = new JTextField();
+		serverAddressTextField.setFont(new Font("Lucida Sans", Font.PLAIN, 16));
 		statusPanel.add(serverAddressTextField);
-		serverAddressTextField.setColumns(12);
+		serverAddressTextField.setColumns(15);
 		serverAddressTextField.setEditable(false);
 
 		logArea = new JTextArea();
+		logArea.setBackground(Color.WHITE);
 		logArea.setRows(10);
 		logArea.setEditable(false);
+		logArea.setFont(new Font("Lucida Sans", Font.PLAIN, 15));
 
 
 		bottomPanel = new JPanel();
 		contentPane.add(bottomPanel, BorderLayout.SOUTH);
 		bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.X_AXIS));
 
-		scrollPane = new JScrollPane(logArea);
-		bottomPanel.add(scrollPane, BorderLayout.SOUTH);
+	
+		bottomLeftPanel = new JPanel();
+		bottomLeftPanel.setBackground(Color.WHITE);
+		bottomPanel.add(bottomLeftPanel);
+		bottomLeftPanel.setLayout(new BorderLayout(0, 0));
 
+		scrollPane = new JScrollPane(logArea);
+		bottomLeftPanel.add(scrollPane, BorderLayout.CENTER);
+		
+		logLabel = new JLabel("Controller Log");
+		logLabel.setFont(new Font("Arial Black", Font.PLAIN, 20));
+		logLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		bottomLeftPanel.add(logLabel, BorderLayout.NORTH);
+		
 		jitterPanel = new JPanel();
 		bottomPanel.add(jitterPanel);
 		jitterPanel.setLayout(new BoxLayout(jitterPanel, BoxLayout.X_AXIS));
@@ -156,7 +174,6 @@ public class BaseFrame extends JFrame {
 
 	void updateImage(BufferedImage image) {
 		imageView.setIcon(new ImageIcon(image));
-		pack();
 	}
 
 	void cleanImage() {
@@ -182,7 +199,7 @@ public class BaseFrame extends JFrame {
 		dataset.setType(HistogramType.FREQUENCY);
 		dataset.addSeries("Hist", data, 30);
 
-		JFreeChart chart = ChartFactory.createHistogram("Jitter Histogram", "ms", "Frames", dataset, PlotOrientation.VERTICAL,
+		JFreeChart chart = ChartFactory.createHistogram("Jitter Histogram", "Jitter (ms)", "Frames", dataset, PlotOrientation.VERTICAL,
 				false, false, false);
 
 		EventQueue.invokeLater(() -> {
