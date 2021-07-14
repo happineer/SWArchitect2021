@@ -5,6 +5,7 @@
 #include "network.h"
 #include "mtcnn.h"
 #include "face_embedder.h"
+#include "json/json.h"
 
 #define PI 3.14159265
 
@@ -31,4 +32,6 @@ int get_detections( cv::Mat &origin_cpu,
 void draw_detections(   cv::Mat &origin_cpu, 
                         std::vector<cv::Rect> *rects, 
                         std::vector<double> *labels,
-                        std::vector<std::string> *label_encodings);
+                        std::vector<std::string> *label_encodings,
+                        bool retroactive_mode,
+                        Json::Value &poi_data);

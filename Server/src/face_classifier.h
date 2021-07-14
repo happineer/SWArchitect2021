@@ -9,6 +9,8 @@
 #include <dlib/svm_threaded.h>
 #include <dlib/svm.h>
 #include <vector>
+#include "json/json.h"
+#include <fstream>
 
 
 
@@ -39,6 +41,8 @@ public:
     void retroactive_init();
     void save_unknown_data(string &unknown_img_filename, string &detection_time);
     void handle_unknown_data(matrix<rgb_pixel> &face);
+    void load_poi_data();
+    Json::Value poi_data;
 
 private:
     void init(face_embedder *embedder);
@@ -63,6 +67,8 @@ private:
     std::string train_data_dir = "faces/train/cropped/";    // dir containing the training face-images
     std::string unknown_dir = "faces/unknown/";             // dir containing unknown images when retroactive mode
     std::string unknown_filename = "faces/unknown_history.txt";    // file containing the time unknown person is detected
+    std::string poi_filename = "faces/poi_info_file.txt";   // file containing the label, detection data of person of interest
+
 
 	FILE *unknown_filp = NULL;
     
