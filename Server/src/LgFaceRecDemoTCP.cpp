@@ -1033,7 +1033,7 @@ static void do_draw_fps(struct task_info *task, struct video_buffer *buffer)
 	char str[256];
 	int n = 0;
 
-	n += sprintf(str + n, "TensorRT FPS: %d", video_fps);
+	n += sprintf(str + n, "Jetson Nano FPS: %d", video_fps);
 #if 0
 	n += sprintf(str + n, " %.2f", send_fps);
 #endif
