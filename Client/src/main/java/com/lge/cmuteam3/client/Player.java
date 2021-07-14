@@ -24,7 +24,6 @@ public class Player implements OnConnectListener {
     private boolean directPlay = false;
     private final UiController uiController;
     private OnPlayListener onPlayListener;
-    private int remainBufferFrame = 0;
 
     public void stop() {
         LOG.debug("Event: onUiRunModeStop");
@@ -50,11 +49,9 @@ public class Player implements OnConnectListener {
     }
     
     private void showImage() {
-    	remainBufferFrame++;
     	Frame frame = receiver.getImageFrame();
         if (frame != null) {
-        	boolean update = remainBufferFrame > 30;
-        	uiController.updateImage(frame, update);
+        	uiController.updateImage(frame);
         	if (onPlayListener != null) {
         		onPlayListener.onDisplayImage(frame);
         	}
@@ -75,22 +72,21 @@ public class Player implements OnConnectListener {
         this.uiController.reset();
     }
 
-    public void start() {
+    public void start(int frameType) {
     	directPlay = false;
     	this.uiController.reset();
     	uiController.runHistogramUpdater();
-        playImages();
+        playImages(frameType);
     }
 
-    public void startDirect() {
+    public void startDirect(int frameType) {
     	directPlay = true;
     	this.uiController.reset();
     	uiController.runHistogramUpdater();
-        playImages();
+        playImages(frameType);
     }
     
-    private void playImages() {
-    	remainBufferFrame = 0;
+    private void playImages(int frameType) {
         if (task != null || running) {
             return;
         }
@@ -100,7 +96,7 @@ public class Player implements OnConnectListener {
         }
         receiver.resetBuffer();
         receiver.setOnConnectListener(this);
-        receiver.startReceive();
+        receiver.startReceive(frameType);
         startReceiving();
         running = true;
     }

@@ -19,7 +19,7 @@ public class RunMode extends BaseMode {
 	public void start() {
 		super.start();
 		NetworkManager networkManager = NetworkManager.getInstance();
-		PlaybackManager.getInstance().playDirect();
+		PlaybackManager.getInstance().playDirect(Constants.CONTROL_VALUE_RUN);
 		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_RUN);
 	}
 

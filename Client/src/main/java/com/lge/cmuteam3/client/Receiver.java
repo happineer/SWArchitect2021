@@ -23,6 +23,8 @@ public class Receiver extends Thread {
 	private boolean imageReady = false;
 	private transient boolean isReceiving = false;
 	
+	private int interestType = Constants.CONTROL_VALUE_UNKNOWN;
+	
 	private int bufferSize;
 	private int bufferCount = 0;
 	
@@ -56,12 +58,13 @@ public class Receiver extends Thread {
 			while(true) {
 				while (isReceiving) {
 					byte[] sizeAr = new byte[4];
+					byte[] frameTypeAr = new byte[4];
 					byte[] initialTimeAr = new byte[8];
 					readNBytes(inputStream, sizeAr, 0, 4);
-					readNBytes(inputStream, initialTimeAr, 0, 4);
+					readNBytes(inputStream, frameTypeAr, 0, 4);
 					readNBytes(inputStream, initialTimeAr, 0, 8);
 					int size = ByteBuffer.wrap(sizeAr).asIntBuffer().get();
-					
+					int frameType = ByteBuffer.wrap(frameTypeAr).asIntBuffer().get();
 					
 					long initialTime = ByteBuffer.wrap(initialTimeAr).asLongBuffer().get();
 					doMonitor(size);
@@ -73,9 +76,11 @@ public class Receiver extends Thread {
 					byte[] imageAr = new byte[size];
 					readNBytes(inputStream, imageAr, 0, size);
 					
-					queue.add(new Frame(ImageIO.read(new ByteArrayInputStream(imageAr)), initialTime));
-					onConnectlistener.onFrameReceived();
-					bufferCount++;
+					if (interestType == frameType) {
+						queue.add(new Frame(ImageIO.read(new ByteArrayInputStream(imageAr)), initialTime));
+						onConnectlistener.onFrameReceived();
+						bufferCount++;
+					}
 					if (bufferCount >= bufferSize) {
 						imageReady = true;
 					}
@@ -138,10 +143,12 @@ public class Receiver extends Thread {
 	public void resetBuffer() {
 		bufferCount = 0;
 		imageReady = false;
+		interestType = Constants.CONTROL_VALUE_UNKNOWN;
 		queue.clear();
 	}
 	
-	public void startReceive() {
+	public void startReceive(int frameType) {
+		interestType = frameType;
 		if (!isStart) {
 			start();
 			isStart = true;

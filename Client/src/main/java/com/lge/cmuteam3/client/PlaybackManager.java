@@ -21,12 +21,12 @@ public class PlaybackManager {
 		player = new Player(uiController);
 	}
 	
-	public void play() {
-		player.start();
+	public void play(int frameType) {
+		player.start(frameType);
 	}
 
-	public void playDirect() {
-		player.startDirect();
+	public void playDirect(int frameType) {
+		player.startDirect(frameType);
 	}
 	
 	public void stop() {

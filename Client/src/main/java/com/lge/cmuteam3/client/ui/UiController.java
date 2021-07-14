@@ -113,14 +113,11 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
         statisticsPanel.reset();
     }
 
-    public void updateImage(Frame newFrame, boolean update) {
+    public void updateImage(Frame newFrame) {
     	BufferedImage image = newFrame.getFrameImage();
         frame.updateImage(image);
-        
-        if (update) {
-        	uiModel.updateImageAdded(newFrame.getInitialTime());
-        	statisticsPanel.update(uiModel);
-        }
+        uiModel.updateImageAdded(newFrame.getLatency());
+    	statisticsPanel.update(uiModel);
     }
 
     public void updateHistogram() {

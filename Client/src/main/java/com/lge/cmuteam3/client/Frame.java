@@ -5,19 +5,19 @@ import java.awt.image.BufferedImage;
 public class Frame {
 
 	BufferedImage frameImage;
-	long initialTime;
+	long latency;
 	
 	public Frame(BufferedImage frameImage, long initialTime) {
 		this.frameImage = frameImage;
-		this.initialTime = initialTime;
+		this.latency = System.currentTimeMillis() - initialTime;
 	}
 	
 	public BufferedImage getFrameImage() {
 		return frameImage;
 	}
 	
-	public long getInitialTime() {
-		return initialTime;
+	public long getLatency() {
+		return latency;
 	}
 	
 }

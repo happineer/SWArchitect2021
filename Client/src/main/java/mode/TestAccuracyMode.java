@@ -38,13 +38,14 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 		NetworkManager networkManager = NetworkManager.getInstance();
 		appendUiLog("Test Accuracy Mode start");
 		PlaybackManager.getInstance().getPlayer().setOnPlayListener(this);
-		PlaybackManager.getInstance().play();
+		PlaybackManager.getInstance().play(Constants.CONTROL_VALUE_ACCURACY);
 		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_ACCURACY);
 	}
 
 	@Override
 	public void stop() {
 		super.stop();
+		PlaybackManager.getInstance().stop();
 		PlaybackManager.getInstance().getPlayer().setOnPlayListener(null);
 	}
 
@@ -56,7 +57,11 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 			ImageIO.write(image, "png", outputfile);
 		} catch (IOException e) {
 			e.printStackTrace();
+			ModeManager.getInstance().onUiStop(this);
 		}
+	    if (accuracyTestFrame > 25) {
+	    	ModeManager.getInstance().onUiStop(this);
+	    }
 	}
 
 	@Override

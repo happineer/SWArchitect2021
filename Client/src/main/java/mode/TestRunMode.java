@@ -20,8 +20,9 @@ public class TestRunMode extends BaseMode {
 	public void start() {
 		super.start();
 		NetworkManager networkManager = NetworkManager.getInstance();
+		PlaybackManager.getInstance().play(Constants.CONTROL_VALUE_TEST_RUN);
 		networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_TEST_RUN);
-		PlaybackManager.getInstance().play();
+		
 		
 	}
 

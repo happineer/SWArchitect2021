@@ -22,11 +22,11 @@ public class UiModel {
 
     ArrayList<Long> histogramData = new ArrayList<>();
 
-    public void updateImageAdded(long initialTime) {
+    public void updateImageAdded(long latency) {
         long currTime = System.currentTimeMillis();
 
         // Save the first time
-        startTime.compareAndSet(0, initialTime);
+        startTime.compareAndSet(0, currTime);
 
         // frame count
         long currCount = count.incrementAndGet();
@@ -37,8 +37,6 @@ public class UiModel {
         if (count.get() == 1) {
             prevTime = currTime;
         }
-
-        long latency = currTime - initialTime;
 
         long currSum = sum.addAndGet(latency);
         avr.set(currSum / currCount);

@@ -1,13 +1,11 @@
 package mode;
 
-import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.network.OnServerStateListener;
 import com.lge.cmuteam3.client.ui.OnUiEventListener;
 import com.lge.cmuteam3.client.ui.UiController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
