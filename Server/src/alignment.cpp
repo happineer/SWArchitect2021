@@ -195,6 +195,8 @@ void draw_detections(   cv::Mat &origin_cpu,
                         Json::Value &poi_data){
         
     Json::StreamWriterBuilder builder;
+    static int cnt;
+
     for(int i = 0; i<rects->size(); i++){
         cv::Scalar bbox_color(0,255,0,255);
         // get label 
@@ -202,15 +204,18 @@ void draw_detections(   cv::Mat &origin_cpu,
         Json::Value detected_time;
         if(labels->at(i) >= 0){
             encoding =  label_encodings->at(labels->at(i));
-            cout << "[RETROACTIVE] encoding: " << encoding << endl;
-            cout << "[RETROACTIVE] " << poi_data.get(encoding, -1) << endl;
-            Json::Value detected_time = poi_data.get(encoding, -1);
+            if (retroactive_mode && cnt%3 == 0) {
+                //cout << "[RETROACTIVE] encoding: " << encoding << endl;
+                //cout << "[RETROACTIVE] " << poi_data.get(encoding, -1) << endl;
+                Json::Value detected_time = poi_data.get(encoding, -1);
 
-            // person of interest
-            if (detected_time != -1) {
-                cout << "[RETROACTIVE] " << "Name: " << encoding << ", Detected Time: " << detected_time << endl;
-                //encoding = "[PoI]" + encoding;
-                encoding = "[PoI]" + encoding + "(" + Json::writeString(builder, detected_time) + ")";
+                // person of interest
+                if (detected_time != -1) {
+                    cout << "[RETROACTIVE] " << "Name: " << encoding << ", Detected Time: " << detected_time << endl;
+                    //encoding = "[PoI]" + encoding;
+                    encoding = "[PoI]" + encoding + "(" + Json::writeString(builder, detected_time) + ")";
+                }
+                cnt = 0;
             }
         }else{
             encoding = "Unknown";
@@ -225,6 +230,7 @@ void draw_detections(   cv::Mat &origin_cpu,
         cv::putText(origin_cpu, encoding , cv::Point(rects->at(i).x,rects->at(i).y), 
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0,0,0,255), 1 );
 
+        cnt++;
     }
 }
 
