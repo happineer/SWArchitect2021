@@ -126,12 +126,12 @@ public class UiController implements NetworkUiLogManager.OnLogAddedListener {
             return;
         }
         double[] data = uiModel.getHistogramData();
-        LOG.info("data size:" + data.length);
+
         frame.updateChart(data);
     }
 
     public void runHistogramUpdater() {
-        future = executor.scheduleAtFixedRate(this::updateHistogram, 1000,4000, TimeUnit.MILLISECONDS);
+        future = executor.scheduleAtFixedRate(this::updateHistogram, 1000, 5000, TimeUnit.MILLISECONDS);
     }
 
     public void stopHistogramUpdater() {
