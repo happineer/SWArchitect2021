@@ -11,7 +11,7 @@ public class UiModel {
 
     AtomicLong count = new AtomicLong(0);
     AtomicLong startTime = new AtomicLong(0);
-    AtomicLong previousTime = new AtomicLong(0);
+    AtomicLong previousLatency = new AtomicLong(0);
     AtomicLong sum = new AtomicLong(0);
     AtomicLong max = new AtomicLong(0);
     AtomicLong min = new AtomicLong(Long.MAX_VALUE);
@@ -22,7 +22,7 @@ public class UiModel {
     double averageJitter = 0;
 
     ArrayList<Long> histogramData = new ArrayList<>();
-    ArrayList<Long> latencyData = new ArrayList<>();
+    ArrayList<Long> latencyFrameTimestamps = new ArrayList<>();
 
     public void updateImageAdded(long latency) {
         long updateTime = System.currentTimeMillis();
@@ -33,14 +33,14 @@ public class UiModel {
         // frame count
         long currCount = count.incrementAndGet();
 
-        long prevTime = previousTime.get();
-        previousTime.set(updateTime);
+        long prevLatency = previousLatency.get();
+        previousLatency.set(latency);
 
-        if (count.get() == 1) {
-            prevTime = updateTime;
+        if (currCount == 1) {
+            prevLatency = latency;
         }
 
-        latencyData.add(updateTime);
+        latencyFrameTimestamps.add(updateTime);
 
         long currSum = sum.addAndGet(latency);
         avr.set(currSum / currCount);
@@ -55,15 +55,15 @@ public class UiModel {
             min.set(latency);
         }
 
-        long jitter = Math.abs(updateTime - prevTime);
+        long jitter = Math.abs(latency - prevLatency);
         histogramData.add(jitter);
 
         long duration = updateTime - startTime.get() + 1;
         averageFps = (double) count.get() / duration * 1000;
 
         int count = 0;
-        for (int i = latencyData.size() - 1; i >= 0 ; i--) {
-            if ((updateTime - latencyData.get(i)) <= 1000) {
+        for (int i = latencyFrameTimestamps.size() - 1; i >= 0 ; i--) {
+            if ((updateTime - latencyFrameTimestamps.get(i)) <= 1000) {
                 count++;
             } else {
                 break;

@@ -182,7 +182,7 @@ public class BaseFrame extends JFrame {
 		dataset.setType(HistogramType.FREQUENCY);
 		dataset.addSeries("Hist", data, 30);
 
-		JFreeChart chart = ChartFactory.createHistogram("Jitter", "ms", "Frames", dataset, PlotOrientation.VERTICAL,
+		JFreeChart chart = ChartFactory.createHistogram("Jitter Histogram", "ms", "Frames", dataset, PlotOrientation.VERTICAL,
 				false, false, false);
 
 		EventQueue.invokeLater(() -> {
