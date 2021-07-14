@@ -9,6 +9,7 @@
 #include <new>
 #include <stdio.h>
 #include <string.h>
+#include <poll.h>
 #include "NetworkTCP.h"
 //-----------------------------------------------------------------
 // OpenTCPListenPort - Creates a Listen TCP port to accept
@@ -251,8 +252,30 @@ ssize_t WriteDataTcp(TTcpConnectedPort TcpConnectedPort,unsigned char *data, siz
 {
   ssize_t total_bytes_written = 0;
   ssize_t bytes_written;
+  struct pollfd fds[1];
+  int ret;
+  int timeout = 100000;
+
+  fds[0].fd = TcpConnectedPort;
+  fds[0].events = POLLOUT;
   while (total_bytes_written != length)
     {
+     ret = poll(fds, 1, 1000);
+	 if (ret == 0) {
+	 	timeout--;
+		if (!timeout) {
+			printf("[%s]: timeout\n", __func__);
+			return -1;
+		}
+	 	continue;
+	 }
+	 if (ret == -1) {
+	 	if (errno == EINTR)
+			continue;
+
+		printf("[%s]: poll errno: %d %s\n", __func__, errno, strerror(errno));
+		return -1;
+	 }
      bytes_written = send(TcpConnectedPort,
 	                               (char *)(data+total_bytes_written),
                                   length - total_bytes_written,0);
