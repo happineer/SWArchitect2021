@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <string>
 #include <fstream>
-
+#include <fcntl.h>
 
 //#define DEBUG_PRINT_ON
 #ifdef DEBUG_PRINT_ON
@@ -44,7 +44,8 @@ face_classifier::face_classifier(face_embedder *embedder){
 }
 
 face_classifier::~face_classifier(){
-
+	if (unknown_filp)
+		fclose(unknown_filp);
 }
 
 int face_classifier::need_restart() {
@@ -74,6 +75,13 @@ void face_classifier::retroactive_init() {
         unknown_index = get_lines(unknown_filename);
         unknown_index++;
     }
+	unknown_filp = fopen(unknown_filename.c_str(), "a");
+	assert(unknown_filp);
+	if (fcntl(fileno(unknown_filp), F_SETFD, FD_CLOEXEC) != 0) {
+		perror("fcntl FD_CLOEXEC");
+	}
+    setlinebuf(unknown_filp);
+
     cout << "[RETROACTIVE] unknown_index: " << unknown_index << endl;
     frame_cnt = 1;
 }
@@ -186,12 +194,12 @@ void face_classifier::save_unknown_data(string &unknown_img_filename, string &de
     cout << "unknown_label: " << unknown_img_filename << endl;
     cout << "unknown_detection_time: " << detection_time << endl;
     cout << "=============================" << endl;
-    string cmd = "echo " + unknown_img_filename + ":" + detection_time + " >> " + unknown_filename;
-    cout << "cmd: " << cmd << endl;
-    system(cmd.c_str());
+	fprintf(unknown_filp, "%s:%s\n", unknown_img_filename.c_str(), detection_time.c_str());
+	unknown_index++;
+
 }
 
-void face_classifier::handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face) {
+void face_classifier::handle_unknown_data(matrix<rgb_pixel> &face) {
     char unknown_img_filename_buff[100];
     std::string unknown_index_zfill = std::to_string(unknown_index);
     padTo(unknown_index_zfill, 10, '0');
@@ -277,7 +285,7 @@ void face_classifier::prediction(   std::vector<sample_type_embedding> *face_emb
             frame_cnt++;
             if (label < 0 && faces != NULL && (frame_cnt%RETROACTIVE_CAPTURE_INTERVAL)==0) {
                 frame_cnt = 0;
-                handle_unknown_data(unknown_index++, faces->at(i));
+                handle_unknown_data(faces->at(i));
             }
         }
         //printf("-1 votes: %d\n", this->num_classifiers - num_votes);
