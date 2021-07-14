@@ -1089,7 +1089,7 @@ static void handle_timer(int fd)
 	printf("[%s] video fps = %d  buffer_count = %d\n", __func__, video_fps, buffer_count);
 }
 
-static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
+static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort, face_classifier *classifier)
 {
 	struct cmd_msg msg;
 	int ret;
@@ -1152,13 +1152,11 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 
 		case CMD_RARUN_MODE:
 			printf("[%s]: CMD_RARUN_MODE\n", __func__);
-            printf("rm -rf ./faces/unknown");
-            system("rm -rf ./faces/unknown");
+            video_buffer_do_flush();
             _mkdir("./faces/unknown");
+			printf("[%s]: retroactive_init()\n", __func__);
+            classifier->retroactive_init();
             retroactive_mode = true;
-			if (g_camera)
-				return;
-			video_buffer_do_flush();
 			break;
 
 		default:
@@ -1407,7 +1405,7 @@ int camera_face_recognition(int argc, char *argv[])
 				if (events[n].events & EPOLLHUP) {
 					printf("[%s]:%d EPOLLHUP\n", __func__, __LINE__);
 				}
-				handle_client_msg(epollfd, events[n].data.fd);
+				handle_client_msg(epollfd, events[n].data.fd, &classifier);
 			}
 		}
     }   
