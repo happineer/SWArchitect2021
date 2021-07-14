@@ -39,6 +39,7 @@ set(CORE_SRCS
     src/pnet_rt.cpp 
     src/rnet_rt.cpp 
     src/TcpSendRecvJpeg.cpp
+    src/jsoncpp.cpp
     )
 
 # AUX_SOURCE_DIRECTORY(./src DIR_SRCS)

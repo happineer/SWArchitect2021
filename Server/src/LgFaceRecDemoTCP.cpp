@@ -992,7 +992,7 @@ void do_face_predict(struct task_info *task, struct video_buffer *buffer)
 	task->classifier->prediction(buffer->face_embeddings, buffer->face_labels, buffer->faces, retroactive_mode);
 
     // draw bounding boxes and labels to the original image 
-    draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels);
+    draw_detections(*buffer->origin_cpu, buffer->rects, buffer->face_labels, task->labels, retroactive_mode, task->classifier->poi_data);
 }
 
 void do_face_recognize(struct task_info *task, struct video_buffer *buffer)

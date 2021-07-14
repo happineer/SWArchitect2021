@@ -1,7 +1,6 @@
 //Author : Daniel595
 
 #include "alignment.h"
-
 //local prototypes
 
 
@@ -191,14 +190,28 @@ int get_detections( cv::Mat &origin_cpu, std::vector<struct Bbox> *detections,
 void draw_detections(   cv::Mat &origin_cpu, 
                         std::vector<cv::Rect> *rects, 
                         std::vector<double> *labels,
-                        std::vector<std::string> *label_encodings){
+                        std::vector<std::string> *label_encodings,
+                        bool retroactive_mode,
+                        Json::Value &poi_data){
         
+    Json::StreamWriterBuilder builder;
     for(int i = 0; i<rects->size(); i++){
         cv::Scalar bbox_color(0,255,0,255);
         // get label 
         string encoding = "";
+        Json::Value detected_time;
         if(labels->at(i) >= 0){
             encoding =  label_encodings->at(labels->at(i));
+            cout << "[RETROACTIVE] encoding: " << encoding << endl;
+            cout << "[RETROACTIVE] " << poi_data.get(encoding, -1) << endl;
+            Json::Value detected_time = poi_data.get(encoding, -1);
+
+            // person of interest
+            if (detected_time != -1) {
+                cout << "[RETROACTIVE] " << "Name: " << encoding << ", Detected Time: " << detected_time << endl;
+                //encoding = "[PoI]" + encoding;
+                encoding = "[PoI]" + encoding + "(" + Json::writeString(builder, detected_time) + ")";
+            }
         }else{
             encoding = "Unknown";
             bbox_color=cv::Scalar(255,0,0,255);
@@ -212,6 +225,6 @@ void draw_detections(   cv::Mat &origin_cpu,
         cv::putText(origin_cpu, encoding , cv::Point(rects->at(i).x,rects->at(i).y), 
                     cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0,0,0,255), 1 );
 
-    }                        
+    }
 }
 

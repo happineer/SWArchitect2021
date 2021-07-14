@@ -5,8 +5,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string>
-#include <fstream>
 #include <fcntl.h>
+
 
 //#define DEBUG_PRINT_ON
 #ifdef DEBUG_PRINT_ON
@@ -68,6 +68,26 @@ bool file_existed (std::string& name) {
   return (stat (name.c_str(), &buffer) == 0);
 }
 
+void face_classifier::load_poi_data() {
+    if (!file_existed (poi_filename)) {
+        return;
+    }
+
+    ifstream json_dir(poi_filename);
+    Json::CharReaderBuilder builder;
+    builder["collectComments"] = false;
+    //Json::Value poi_data;
+
+    JSONCPP_STRING errs;
+    bool parseResult = parseFromStream(builder, json_dir, &poi_data, &errs);
+
+    if (parseResult == false) {
+        cout << "[RETROACTIVE] failed to parse json file: " << poi_filename << endl;
+        return;
+    }
+    cout << "[RETROACTIVE] success to load poi_data: " << poi_filename << endl;
+}
+
 void face_classifier::retroactive_init() {
     unknown_index = 1;
     if (file_existed (unknown_filename)) {
@@ -84,6 +104,8 @@ void face_classifier::retroactive_init() {
 
     cout << "[RETROACTIVE] unknown_index: " << unknown_index << endl;
     frame_cnt = 1;
+
+    load_poi_data();
 }
 
 // make first prediction 
