@@ -52,7 +52,8 @@ public class TestAccuracyMode extends BaseMode implements OnPlayListener {
 	@Override
 	public void onDisplayImage(Frame frame) {
 		BufferedImage image = frame.getFrameImage();
-		File outputfile = new File(currentPath + accuracyFolder + (accuracyTestFrame++) + ".png");
+		//File outputfile = new File(currentPath + accuracyFolder + (accuracyTestFrame++) + ".png");
+        File outputfile = new File("D:\\Final_DEMO" + accuracyFolder + (accuracyTestFrame++) + ".png");
 	    try {
 			ImageIO.write(image, "png", outputfile);
 		} catch (IOException e) {
