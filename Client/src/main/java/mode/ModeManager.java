@@ -1,5 +1,6 @@
 package mode;
 
+import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.network.OnServerStateListener;
 import com.lge.cmuteam3.client.ui.OnUiEventListener;
@@ -93,12 +94,12 @@ public class ModeManager implements OnUiEventListener, OnServerStateListener {
 
 	@Override
 	public void onFail(int serverState) {
-		if (serverState == 1)
+		if (serverState == Constants.CONNECTION_STATE_CONNECTING)
 			uiController.updateConnectionStatus("Reconnecting...");
-		else if (serverState == 2)
+		else if (serverState == Constants.CONNECTION_STATE_FAILED)
 			uiController.updateConnectionStatus("Failed");
-		else if (serverState == 0)
-			uiController.updateConnectionStatus("Disconnected");
+		else if (serverState == Constants.CONNECTION_STATE_RESCANNING)
+			uiController.updateConnectionStatus("Rescanning...");
 		onUiStop(currentMode);
 	}
 }

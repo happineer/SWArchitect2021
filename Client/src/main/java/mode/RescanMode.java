@@ -43,13 +43,14 @@ public class RescanMode extends BaseMode {
                 networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_RESCAN);
 
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     LOG.info("sleep Interrupted");
                 }
 
                 // Disconnect
-                networkManager.disconnect();
+                networkManager.disconnect(Constants.CONNECTION_STATE_RESCANNING);
+                
             } else {
                 appendUiLog("Rescan canceled.");
                 ModeManager.getInstance().onUiStop(this);

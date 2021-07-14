@@ -3,6 +3,7 @@ package com.lge.cmuteam3.client;
 public class Constants {
 
 	// CONNECTION STATE
+	public static int CONNECTION_STATE_RESCANNING = 0;
 	public static int CONNECTION_STATE_CONNECTING = 1;
 	public static int CONNECTION_STATE_FAILED = 2;
 	

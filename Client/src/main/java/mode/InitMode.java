@@ -1,5 +1,6 @@
 package mode;
 
+import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.network.NetworkManager;
 import com.lge.cmuteam3.client.ui.UiController;
 
@@ -10,7 +11,7 @@ public class InitMode extends BaseMode {
 
 	@Override
 	public String getModeName() {
-		return "Init";
+		return "Connect";
 	}
 	
 	@Override
@@ -22,7 +23,7 @@ public class InitMode extends BaseMode {
 			return;
 		}
 		getUiController().updateConnectionStatus("Connecting...");
-		NetworkManager.getInstance().initialize();
+		NetworkManager.getInstance().initialize(Constants.CONNECTION_STATE_CONNECTING);
 	}
 
 	@Override

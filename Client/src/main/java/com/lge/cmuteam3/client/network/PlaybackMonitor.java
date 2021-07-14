@@ -5,6 +5,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import com.lge.cmuteam3.client.Constants;
+
 public class PlaybackMonitor {
 
 	private final ScheduledExecutorService executor;
@@ -42,7 +44,7 @@ public class PlaybackMonitor {
 	}
 	
 	public void handleResult() {
-		NetworkManager.getInstance().reInitialize();
+		NetworkManager.getInstance().reInitialize(Constants.CONNECTION_STATE_CONNECTING);
 	}
 	
 }

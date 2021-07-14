@@ -5,15 +5,12 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-
+import java.util.concurrent.TimeUnit;
 import com.lge.cmuteam3.client.Constants;
 import com.lge.cmuteam3.client.FileProperties;
-import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.Receiver;
-
 import mode.Mode;
 import mode.ModeManager;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +18,7 @@ public class NetworkManager {
 	private static final Logger LOG = LoggerFactory.getLogger(NetworkManager.class);
 	private static NetworkManager instance;
 	
-	private final int retryCount = 30;
+	private final int retryCount = 100;
 	private Socket nanoSocket;
 	private Receiver receiver;
 	private OnServerStateListener onServerStateListener;
@@ -38,11 +35,11 @@ public class NetworkManager {
 		return instance;
 	}
 	
-	public synchronized void initialize() {
-		serviceUnavailable(Constants.CONNECTION_STATE_CONNECTING);
+	public synchronized void initialize(int reason) {
+		serviceUnavailable(reason);
 		try {
 			for (int i = 0; i < retryCount; i++) {
-				init();
+				init(reason);
 				if (isReady) {
 					return;
 				}
@@ -54,7 +51,7 @@ public class NetworkManager {
 		}
 	}
 	
-	private void init() {
+	private void init(int reason) {
 		if (isReady) {
 			serviceReady();
 			return;
@@ -67,6 +64,10 @@ public class NetworkManager {
 			String serverInfo = serverIp + ":" + serverTransferPort;
 			LOG.info(serverInfo);
 			
+			if (receiver != null) {
+				receiver.terminate();
+			}
+			
 			NetworkUiLogManager.append("Try to connect : " + serverInfo);
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			receiver = new Receiver(nanoSocket);
@@ -75,14 +76,14 @@ public class NetworkManager {
 			String msg = "Connection failed! : [" + e.getMessage() + "]";
 			LOG.info(msg);
 			NetworkUiLogManager.append(msg);
-			serviceUnavailable(1);
+			serviceUnavailable(reason);
 		}
 	}
 
-	public void reInitialize() {
+	public void reInitialize(int reason) {
 		isReady = false;
 		lastMode = ModeManager.getInstance().getCurrentMode(null);
-		initialize();
+		initialize(reason);
 	}
 
 	private void serviceReady() {
@@ -137,15 +138,20 @@ public class NetworkManager {
 		this.onServerStateListener = onServerStateListener;
 	}
 
-	public void disconnect() {
+	public void disconnect(int reason) {
 		if (nanoSocket != null) {
 			try {
-				serviceUnavailable(0);
 				nanoSocket.close();
 				nanoSocket = null;
 			} catch (IOException e) {
 				LOG.error("Socket Exception:" + e.getMessage());
 			}
+			
+			serviceUnavailable(reason);
+			
+			executor.schedule(()-> {
+				reInitialize(reason);
+			}, 5, TimeUnit.SECONDS);
 		}
 	}
 }

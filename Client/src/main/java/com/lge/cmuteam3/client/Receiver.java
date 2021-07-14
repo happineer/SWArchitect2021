@@ -55,7 +55,7 @@ public class Receiver extends Thread {
 			
 			// Long live thread
 			// TODO : consider Executor
-			while(true) {
+			while(isStart) {
 				while (isReceiving) {
 					byte[] sizeAr = new byte[4];
 					byte[] frameTypeAr = new byte[4];
@@ -140,6 +140,10 @@ public class Receiver extends Thread {
 		this.isReceiving = false;
 	}
 
+	public void terminate() {
+		isStart = false;
+	}
+	
 	public void resetBuffer() {
 		bufferCount = 0;
 		imageReady = false;
