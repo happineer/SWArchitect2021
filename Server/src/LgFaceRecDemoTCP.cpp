@@ -65,6 +65,7 @@ enum INPUT_MODE {
 };
 
 static int input_mode = INPUT_CAMERA;
+static unsigned int run_video_mode;
 
 static char *video_path;
 
@@ -127,6 +128,7 @@ struct video_buffer {
 	std::vector<struct Bbox> *detections;
 
 	int num_dets;
+	unsigned int video_mode;
 	std::vector<cv::Rect> *rects;
     std::vector<float*> *keypoints;
     std::vector<matrix<rgb_pixel>> *faces;                                   
@@ -280,6 +282,7 @@ static inline void video_buffer_init(struct video_buffer *buffer)
 	buffer->faces->clear();
 	buffer->face_embeddings->clear();
 	buffer->face_labels->clear();
+	buffer->video_mode = run_video_mode;
 }
 
 static inline void video_buffer_mark_time(struct video_buffer *buffer)
@@ -1020,7 +1023,7 @@ static void do_send_video(struct task_info *task, struct video_buffer *buffer)
 
 	//Render captured image
 	if (face_detect_send_timestamp) {
-		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu, buffer->timestamp) < 0) {
+		if (TcpSendImageAsJpeg(gTcpConnectedPort, buffer->origin_cpu, buffer->timestamp, buffer->video_mode) < 0) {
 			PERROR("[%s]:%d TcpSendImageAsJpeg\n", __func__, __LINE__);
 			diconnect_client();
 			return;
@@ -1137,6 +1140,8 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 		}
 	}
 #endif
+
+	run_video_mode = msg.value;
 
 	send_cmd_msg(&msg);
 }
