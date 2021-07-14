@@ -93,8 +93,8 @@ unsigned int FrameCount=0;
 /***********************************************************************************************/
 /***********************************************************************************************/
 
-#define MJPEG_OUT_BUF_NR		8
-#define MJPEG_OUT_BUF_LOW		1
+#define MJPEG_OUT_BUF_NR		6
+#define MJPEG_OUT_BUF_LOW		0
 #define MJPEG_PRE_BUF_NR		2
 
 static int buffer_count = MJPEG_OUT_BUF_NR;
@@ -1018,6 +1018,16 @@ static void diconnect_client(void)
 	return;
 }
 
+static void epoll_del(int epollfd, int fd)
+{
+	if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, NULL) == -1) {
+		perror("epoll_ctl: EPOLL_CTL_DEL conn_sock");
+		PERROR("[%s]:%d EPOLL_CTL_DEL\n", __func__, __LINE__);
+	}
+	printf("[%s] epoll_ctl: EPOLL_CTL_DEL conn_sock\n", __func__);
+}
+
+
 static void do_draw_fps(struct task_info *task, struct video_buffer *buffer)
 {
 	char str[256];
@@ -1117,9 +1127,9 @@ static void handle_client_msg(int epollfd, TTcpConnectedPort tcpConnectedPort)
 	
 		case CMD_RUN_MODE:
 			printf("[%s]: CMD_RUN_MODE\n", __func__);
-			if (g_camera)
-				return;
-			video_buffer_do_flush();
+			if (!g_camera) {
+				video_buffer_do_flush();
+			}
 			break;
 	
 		case CMD_TEST_RUN_MODE:
@@ -1365,19 +1375,23 @@ int camera_face_recognition(int argc, char *argv[])
 					printf("AcceptTcpConnection Failed\n");
 					continue;
 				}
-				if (gTcpConnectedPort != -1) {
-					printf("Already connected, disconnecting..\n");
-					CloseTcpConnectedPort(connectedPort);
-					continue;
-				}
-				//init_socket(connectedPort);
-				gTcpConnectedPort = connectedPort;
+				
 				printf("Accepted connection Request\n");
-				ev.data.fd = gTcpConnectedPort;
+				ev.data.fd = connectedPort;
 				if (epoll_ctl(epollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
 					perror("epoll_ctl: conn_sock");
 					exit(EXIT_FAILURE);
 				}
+
+				if (gTcpConnectedPort != -1) {
+					epoll_del(epollfd, gTcpConnectedPort);
+					printf("Already connected, old socket disconnecting..\n");
+					diconnect_client();
+				}
+
+				init_socket(connectedPort);
+				gTcpConnectedPort = connectedPort;
+				
 				if (face_detect_autostart)
 					start_video_stream(gTcpConnectedPort);
 			} else if (events[n].data.fd == timerfd) {
