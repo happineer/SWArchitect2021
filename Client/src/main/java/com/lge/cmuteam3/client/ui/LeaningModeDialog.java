@@ -38,11 +38,20 @@ public class LeaningModeDialog extends JDialog {
         namePanel.add(confirmButton);
         confirmButton.addActionListener(e -> {
             String name = textField.getText().trim();
-            LOG.info("name:" + name);
+            LOG.info("name:" + name + " length:" + name.length());
             if (name.length() == 0) {
                 JOptionPane.showMessageDialog(LeaningModeDialog.this, "Name is not inserted.");
                 return;
             }
+            if (name.length() > 30) {
+                JOptionPane.showMessageDialog(LeaningModeDialog.this, "Name is longer than 30 characters. Please reduce it.");
+                return;
+            }
+            if (!isAlphaNumeric(name)) {
+                JOptionPane.showMessageDialog(LeaningModeDialog.this, "Name is not alphanumeric.");
+                return;
+            }
+
             dispose();
             listener.onDialogSend(name, files);
         });
@@ -82,6 +91,10 @@ public class LeaningModeDialog extends JDialog {
                 listener.onDialogCanceled();
             }
         });
+    }
+
+    public static boolean isAlphaNumeric(String s) {
+        return s != null && s.matches("^[a-zA-Z0-9]*$");
     }
 
     private void addImageTiles() {

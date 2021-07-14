@@ -19,7 +19,7 @@ public class UiModel {
 
     double averageFps = 0;
     int fps = 0;
-    double averageJitter = 0;
+    double averageJitter = 0.0;
 
     ArrayList<Long> histogramData = new ArrayList<>();
     ArrayList<Long> latencyFrameTimestamps = new ArrayList<>();
@@ -104,8 +104,9 @@ public class UiModel {
             result[i] = (double) histogramData.get(i);
             sum += result[i];
         }
-        averageJitter = sum / size;
-
+        if (size != 0) {
+            averageJitter = sum / size;
+        }
         return result;
     }
 
