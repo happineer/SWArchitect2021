@@ -25,12 +25,12 @@ public class PlaybackMonitor {
 		}
 		
 		if (future == null) {
-			future = executor.schedule(this::handleResult, 10, TimeUnit.SECONDS);
+			future = executor.schedule(this::handleResult, 5, TimeUnit.SECONDS);
 			return;
 		}
 		if (future != null && size != 0) {
 			future.cancel(false);
-			future = executor.schedule(this::handleResult, 10, TimeUnit.SECONDS);
+			future = executor.schedule(this::handleResult, 5, TimeUnit.SECONDS);
 		}	
 	}
 	

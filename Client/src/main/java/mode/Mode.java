@@ -11,4 +11,5 @@ public interface Mode {
 	boolean needTransferSocket();
 	RunningButtonMode getRunningButtonMode();
 	boolean isRunning();
+	boolean needRestore();
 }

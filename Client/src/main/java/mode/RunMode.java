@@ -33,4 +33,9 @@ public class RunMode extends BaseMode {
 	public RunningButtonMode getRunningButtonMode() {
 		return RunningButtonMode.DISABLE_ALL_EXCEPT_CURRENT;
 	}
+	
+	@Override
+    public boolean needRestore() {
+        return true;
+    }
 }

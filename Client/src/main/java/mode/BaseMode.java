@@ -73,4 +73,9 @@ public abstract class BaseMode implements Mode {
         setRunning(false);
         appendUiLog(getModeName() + " Mode stop");
     }
+    
+    @Override
+    public boolean needRestore() {
+        return false;
+    }
 }

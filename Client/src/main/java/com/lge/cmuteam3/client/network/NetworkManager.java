@@ -11,6 +11,9 @@ import com.lge.cmuteam3.client.FileProperties;
 import com.lge.cmuteam3.client.PlaybackManager;
 import com.lge.cmuteam3.client.Receiver;
 
+import mode.Mode;
+import mode.ModeManager;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,11 +21,12 @@ public class NetworkManager {
 	private static final Logger LOG = LoggerFactory.getLogger(NetworkManager.class);
 	private static NetworkManager instance;
 	
+	private final int retryCount = 30;
 	private Socket nanoSocket;
 	private Receiver receiver;
 	private OnServerStateListener onServerStateListener;
 	private boolean isReady = false;
-	private int retryCount = 0;
+	private Mode lastMode = null;
 	
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	
@@ -37,7 +41,7 @@ public class NetworkManager {
 	public synchronized void initialize() {
 		serviceUnavailable(Constants.CONNECTION_STATE_CONNECTING);
 		try {
-			for (int i = 0; i < 3; i++) {
+			for (int i = 0; i < retryCount; i++) {
 				init();
 				if (isReady) {
 					return;
@@ -66,9 +70,7 @@ public class NetworkManager {
 			NetworkUiLogManager.append("Try to connect : " + serverInfo);
 			nanoSocket = new Socket(serverIp, serverTransferPort);
 			receiver = new Receiver(nanoSocket);
-			System.out.println("gaenoo socket connect");
 			serviceReady();
-			
 		} catch (Exception e) {
 			String msg = "Connection failed! : [" + e.getMessage() + "]";
 			LOG.info(msg);
@@ -79,6 +81,7 @@ public class NetworkManager {
 
 	public void reInitialize() {
 		isReady = false;
+		lastMode = ModeManager.getInstance().getCurrentMode(null);
 		initialize();
 	}
 
@@ -86,6 +89,10 @@ public class NetworkManager {
 		isReady = true;
 		if (onServerStateListener != null) {
 			onServerStateListener.onReady();
+		}
+		if (lastMode != null && lastMode.needRestore()) {
+			ModeManager.getInstance().onUiStart(lastMode);
+			lastMode = null;
 		}
 	}
 
