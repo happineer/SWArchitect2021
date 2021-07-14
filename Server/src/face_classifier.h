@@ -38,7 +38,7 @@ public:
     // retroactive
     void retroactive_init();
     void save_unknown_data(string &unknown_img_filename, string &detection_time);
-    void handle_unknown_data(int unknown_index, matrix<rgb_pixel> &face);
+    void handle_unknown_data(matrix<rgb_pixel> &face);
 
 private:
     void init(face_embedder *embedder);
@@ -64,6 +64,7 @@ private:
     std::string unknown_dir = "faces/unknown/";             // dir containing unknown images when retroactive mode
     std::string unknown_filename = "faces/unknown_history.txt";    // file containing the time unknown person is detected
 
+	FILE *unknown_filp = NULL;
     
     //face_embedder embedder;                                 // embeddings network for generate training data
     std::vector<std::string> label_encoding;                // persons/class names
