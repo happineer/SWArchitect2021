@@ -38,7 +38,7 @@ struct __attribute__((packed)) video_head {
 	long long timestamp;
 };
 
-int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long long timestamp)
+int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long long timestamp, unsigned int video_mode = 0)
 {
 	struct video_head head;
 	unsigned int imagesize;
@@ -46,7 +46,7 @@ int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long l
     cv::imencode(".jpg", *Image, sendbuff, param);
 
     head.size = htonl(sendbuff.size()); // convert image size to network format
-	head.rev = 0x12345678;
+	head.rev = htonl(video_mode);
 	head.timestamp = timestamp;
 
     if (WriteDataTcp(TcpConnectedPort,(unsigned char *)&head, sizeof(head)) != sizeof(head))

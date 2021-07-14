@@ -12,7 +12,7 @@
 #include "NetworkTCP.h"
 
 int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort, cv::Mat *Image);
-int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long long timestamp);
+int TcpSendImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image, long long timestamp, unsigned int video_mode);
 bool TcpRecvImageAsJpeg(TTcpConnectedPort TcpConnectedPort,cv::Mat *Image);
 
 #endif
