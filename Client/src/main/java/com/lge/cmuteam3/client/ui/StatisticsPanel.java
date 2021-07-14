@@ -31,6 +31,8 @@ public class StatisticsPanel extends JPanel {
 	private final JTextField fpsTextField;
 	private final JLabel elapsedTimeLabel;
 	private final JTextField elapsedTimeTextField;
+	private final JLabel averageJitterLabel;
+	private final JTextField averageJitterTextField;
 
 	public StatisticsPanel() {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -59,18 +61,24 @@ public class StatisticsPanel extends JPanel {
 
 		avrLatencyTextField = new JTextField();
 		setCommonStyleTextField(avrLatencyTextField);
-		
-		fullTimeFpsLabel = new JLabel("Average Frame rate");
-		add(fullTimeFpsLabel);
-
-		fullTimeFpsTextField = new JTextField();
-		setCommonStyleTextField(fullTimeFpsTextField);
 
 		fpsLabel = new JLabel("Frame rate");
 		add(fpsLabel);
 
 		fpsTextField = new JTextField();
 		setCommonStyleTextField(fpsTextField);
+
+		fullTimeFpsLabel = new JLabel("Avr Frame rate");
+		add(fullTimeFpsLabel);
+
+		fullTimeFpsTextField = new JTextField();
+		setCommonStyleTextField(fullTimeFpsTextField);
+
+		averageJitterLabel = new JLabel("Avr Jitter");
+		add(averageJitterLabel);
+
+		averageJitterTextField = new JTextField();
+		setCommonStyleTextField(averageJitterTextField);
 
 		elapsedTimeLabel = new JLabel("Elapsed Time");
 		add(elapsedTimeLabel);
@@ -93,13 +101,14 @@ public class StatisticsPanel extends JPanel {
 		field.setMaximumSize(curd);
 	}
 
-	public void update(long frame, long max, long min, long avr, double fullTimeFps, double fps, long elapsedTime) {
+	public void update(long frame, long max, long min, long avr, double fullTimeFps, int fps, long elapsedTime, double averageJitter) {
 		frameTextField.setText(Long.toString(frame));
 		maxLatencyTextField.setText(Long.toString(max));
 		minLatencyTextField.setText(Long.toString(min));
 		avrLatencyTextField.setText(Long.toString(avr));
+		fpsTextField.setText(Integer.toString(fps));
 		fullTimeFpsTextField.setText(String.format("%.2f", fullTimeFps));
-		fpsTextField.setText(String.format("%.2f", fps));
+		averageJitterTextField.setText(String.format("%.2f", averageJitter));
 
 		String dateFormatted = formatTime(elapsedTime);
 		elapsedTimeTextField.setText(dateFormatted);
@@ -113,10 +122,10 @@ public class StatisticsPanel extends JPanel {
 	}
 
 	public void update(UiModel uiModel) {
-		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr(), uiModel.getFullTimeFps(), uiModel.getFps(), uiModel.getElapsedTime());
+		update(uiModel.getCount(), uiModel.getMax(), uiModel.getMin(), uiModel.getAvr(), uiModel.getAverageFps(), uiModel.getFps(), uiModel.getElapsedTime(), uiModel.getAverageJitter());
 	}
 
 	public void reset() {
-		update(0, 0, 0, 0, 0, 0, 0);
+		update(0, 0, 0, 0, 0, 0, 0, 0);
 	}
 }

@@ -1,5 +1,6 @@
 package com.lge.cmuteam3.client.ui;
 
+import com.lge.cmuteam3.client.FileProperties;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -181,7 +182,7 @@ public class BaseFrame extends JFrame {
 		dataset.setType(HistogramType.FREQUENCY);
 		dataset.addSeries("Hist", data, 30);
 
-		JFreeChart chart = ChartFactory.createHistogram(null, "ms", "Frames", dataset, PlotOrientation.VERTICAL,
+		JFreeChart chart = ChartFactory.createHistogram("Jitter Histogram", "ms", "Frames", dataset, PlotOrientation.VERTICAL,
 				false, false, false);
 
 		EventQueue.invokeLater(() -> {

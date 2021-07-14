@@ -38,6 +38,7 @@ public class RescanMode extends BaseMode {
             LOG.info("answer : yes");
             if (n == 0) {
                 appendUiLog("Rescan requested!");
+                appendUiLog(" ** Rescan mode runs in the background and the server stops for a little while.");
                 NetworkManager networkManager = NetworkManager.getInstance();
                 networkManager.controlNano(Constants.CONTROL_TYPE_NORMAL, Constants.CONTROL_VALUE_RESCAN);
 
@@ -49,7 +50,6 @@ public class RescanMode extends BaseMode {
 
                 // Disconnect
                 networkManager.disconnect();
-                ModeManager.getInstance().onFail(0);
             } else {
                 appendUiLog("Rescan canceled.");
                 ModeManager.getInstance().onUiStop(this);
